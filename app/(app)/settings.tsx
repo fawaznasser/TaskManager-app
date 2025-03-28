@@ -1,3 +1,5 @@
 import SettingsScreen from '../screens/SettingsScreen';
 
-export default SettingsScreen; 
+export default function Settings() {
+  return <SettingsScreen />;
+} 

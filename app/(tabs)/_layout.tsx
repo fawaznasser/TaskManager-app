@@ -2,18 +2,18 @@ import { Tabs } from 'expo-router';
 import React from 'react';
 import { Platform } from 'react-native';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../context/ThemeContext';
 
 import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        tabBarInactiveTintColor: '#666',
         tabBarStyle: {
           display: 'none',
         },
@@ -22,27 +22,18 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Tasks',
+          title: 'Home',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="list" size={size} color={color} />
+            <MaterialIcons name="home" size={size} color={color} />
           ),
         }}
       />
       <Tabs.Screen
-        name="mood"
+        name="explore"
         options={{
-          title: 'Mood',
+          title: 'Explore',
           tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="mood" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="pomodoro"
-        options={{
-          title: 'Focus',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="timer-outline" size={size} color={color} />
+            <MaterialIcons name="explore" size={size} color={color} />
           ),
         }}
       />

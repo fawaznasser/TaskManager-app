@@ -1,3 +1,5 @@
 import CreateTaskScreen from '../screens/CreateTaskScreen';
 
-export default CreateTaskScreen; 
+export default function CreateTask() {
+  return <CreateTaskScreen />;
+} 

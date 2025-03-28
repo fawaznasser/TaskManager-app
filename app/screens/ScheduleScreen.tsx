@@ -18,29 +18,42 @@ import { collection, addDoc, Timestamp } from 'firebase/firestore';
 import { auth, db } from '@/config/firebase';
 import { useTheme } from '../context/ThemeContext';
 
-const CreateRecurringTaskScreen = () => {
+const ScheduleScreen = () => {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
-  const [task, setTask] = useState({
+  const [schedule, setSchedule] = useState({
     title: '',
+    startTime: new Date(),
+    endTime: new Date(new Date().setHours(new Date().getHours() + 1)),
+    days: [] as string[],
     description: '',
-    deadline: new Date(),
-    priority: 'medium' as 'low' | 'medium' | 'high',
-    recurringType: 'daily' as 'daily' | 'weekly' | 'monthly',
-    recurringInterval: 1,
-    recurringEndDate: new Date(new Date().setMonth(new Date().getMonth() + 1)),
   });
-  const [showDeadlinePicker, setShowDeadlinePicker] = useState(false);
-  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
+  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
 
-  const handleCreateTask = async () => {
-    if (!task.title.trim()) {
-      Alert.alert('Error', 'Please fill in the task title');
+  const days = [
+    { id: 'monday', label: 'Mon', icon: 'monday' as const },
+    { id: 'tuesday', label: 'Tue', icon: 'tuesday' as const },
+    { id: 'wednesday', label: 'Wed', icon: 'wednesday' as const },
+    { id: 'thursday', label: 'Thu', icon: 'thursday' as const },
+    { id: 'friday', label: 'Fri', icon: 'friday' as const },
+    { id: 'saturday', label: 'Sat', icon: 'saturday' as const },
+    { id: 'sunday', label: 'Sun', icon: 'sunday' as const },
+  ];
+
+  const handleCreateSchedule = async () => {
+    if (!schedule.title.trim()) {
+      Alert.alert('Error', 'Please fill in the schedule title');
       return;
     }
 
-    if (task.recurringEndDate <= task.deadline) {
-      Alert.alert('Error', 'End date must be after the start date');
+    if (schedule.days.length === 0) {
+      Alert.alert('Error', 'Please select at least one day');
+      return;
+    }
+
+    if (schedule.endTime <= schedule.startTime) {
+      Alert.alert('Error', 'End time must be after start time');
       return;
     }
 
@@ -51,25 +64,30 @@ const CreateRecurringTaskScreen = () => {
         return;
       }
 
-      await addDoc(collection(db, 'tasks'), {
-        title: task.title.trim(),
-        description: task.description.trim() || '',
-        deadline: Timestamp.fromDate(task.deadline),
-        priority: task.priority,
+      await addDoc(collection(db, 'schedules'), {
+        title: schedule.title.trim(),
+        description: schedule.description.trim() || '',
+        startTime: Timestamp.fromDate(schedule.startTime),
+        endTime: Timestamp.fromDate(schedule.endTime),
+        days: schedule.days,
         userId,
         createdAt: Timestamp.now(),
-        completed: false,
-        isRecurring: true,
-        recurringType: task.recurringType,
-        recurringInterval: task.recurringInterval,
-        recurringEndDate: Timestamp.fromDate(task.recurringEndDate),
       });
 
       router.back();
     } catch (error) {
-      console.error('Error creating recurring task:', error);
-      Alert.alert('Error', 'Failed to create recurring task. Please try again.');
+      console.error('Error creating schedule:', error);
+      Alert.alert('Error', 'Failed to create schedule. Please try again.');
     }
+  };
+
+  const toggleDay = (dayId: string) => {
+    setSchedule(prev => ({
+      ...prev,
+      days: prev.days.includes(dayId)
+        ? prev.days.filter(d => d !== dayId)
+        : [...prev.days, dayId]
+    }));
   };
 
   return (
@@ -85,7 +103,7 @@ const CreateRecurringTaskScreen = () => {
         >
           <MaterialIcons name="arrow-back" size={24} color={isDark ? "#fff" : "#333"} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, isDark && styles.darkText]}>Create Recurring Task</Text>
+        <Text style={[styles.headerTitle, isDark && styles.darkText]}>Create Schedule</Text>
         <View style={styles.headerRight} />
       </View>
 
@@ -99,9 +117,9 @@ const CreateRecurringTaskScreen = () => {
             <Text style={[styles.label, isDark && styles.darkText]}>Title</Text>
             <TextInput
               style={[styles.input, isDark && styles.darkInput]}
-              placeholder="Enter task title"
-              value={task.title}
-              onChangeText={(text) => setTask({ ...task, title: text })}
+              placeholder="Enter schedule title"
+              value={schedule.title}
+              onChangeText={(text: string) => setSchedule({ ...schedule, title: text })}
               placeholderTextColor={isDark ? "#888" : "#999"}
             />
           </View>
@@ -110,9 +128,9 @@ const CreateRecurringTaskScreen = () => {
             <Text style={[styles.label, isDark && styles.darkText]}>Description</Text>
             <TextInput
               style={[styles.input, styles.textArea, isDark && styles.darkInput]}
-              placeholder="Add task description"
-              value={task.description}
-              onChangeText={(text) => setTask({ ...task, description: text })}
+              placeholder="Add schedule description"
+              value={schedule.description}
+              onChangeText={(text: string) => setSchedule({ ...schedule, description: text })}
               multiline
               numberOfLines={4}
               placeholderTextColor={isDark ? "#888" : "#999"}
@@ -120,15 +138,15 @@ const CreateRecurringTaskScreen = () => {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={[styles.label, isDark && styles.darkText]}>Start Date</Text>
+            <Text style={[styles.label, isDark && styles.darkText]}>Start Time</Text>
             <TouchableOpacity
               style={[styles.datePickerButton, isDark && styles.darkDatePickerButton]}
-              onPress={() => setShowDeadlinePicker(true)}
+              onPress={() => setShowStartTimePicker(true)}
             >
               <View style={styles.datePickerContent}>
-                <MaterialIcons name="calendar-today" size={20} color={isDark ? "#888" : "#666"} />
+                <MaterialIcons name="schedule" size={20} color={isDark ? "#888" : "#666"} />
                 <Text style={[styles.datePickerText, isDark && styles.darkText]}>
-                  {task.deadline.toLocaleDateString()}
+                  {schedule.startTime.toLocaleTimeString()}
                 </Text>
               </View>
               <MaterialIcons name="chevron-right" size={20} color={isDark ? "#888" : "#666"} />
@@ -136,120 +154,70 @@ const CreateRecurringTaskScreen = () => {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={[styles.label, isDark && styles.darkText]}>End Date</Text>
+            <Text style={[styles.label, isDark && styles.darkText]}>End Time</Text>
             <TouchableOpacity
               style={[styles.datePickerButton, isDark && styles.darkDatePickerButton]}
-              onPress={() => setShowEndDatePicker(true)}
+              onPress={() => setShowEndTimePicker(true)}
             >
               <View style={styles.datePickerContent}>
-                <MaterialIcons name="event" size={20} color={isDark ? "#888" : "#666"} />
+                <MaterialIcons name="schedule" size={20} color={isDark ? "#888" : "#666"} />
                 <Text style={[styles.datePickerText, isDark && styles.darkText]}>
-                  {task.recurringEndDate.toLocaleDateString()}
+                  {schedule.endTime.toLocaleTimeString()}
                 </Text>
               </View>
               <MaterialIcons name="chevron-right" size={20} color={isDark ? "#888" : "#666"} />
             </TouchableOpacity>
           </View>
 
-          {showDeadlinePicker && (
+          {showStartTimePicker && (
             <DateTimePicker
-              value={task.deadline}
-              mode="date"
+              value={schedule.startTime}
+              mode="time"
               display={Platform.OS === 'ios' ? 'spinner' : 'default'}
               onChange={(event, selectedDate) => {
-                setShowDeadlinePicker(Platform.OS === 'ios');
+                setShowStartTimePicker(Platform.OS === 'ios');
                 if (selectedDate) {
-                  setTask({ ...task, deadline: selectedDate });
+                  setSchedule({ ...schedule, startTime: selectedDate });
                 }
               }}
-              minimumDate={new Date()}
             />
           )}
 
-          {showEndDatePicker && (
+          {showEndTimePicker && (
             <DateTimePicker
-              value={task.recurringEndDate}
-              mode="date"
+              value={schedule.endTime}
+              mode="time"
               display={Platform.OS === 'ios' ? 'spinner' : 'default'}
               onChange={(event, selectedDate) => {
-                setShowEndDatePicker(Platform.OS === 'ios');
+                setShowEndTimePicker(Platform.OS === 'ios');
                 if (selectedDate) {
-                  setTask({ ...task, recurringEndDate: selectedDate });
+                  setSchedule({ ...schedule, endTime: selectedDate });
                 }
               }}
-              minimumDate={task.deadline}
             />
           )}
 
           <View style={styles.inputGroup}>
-            <Text style={[styles.label, isDark && styles.darkText]}>Recurrence Type</Text>
-            <View style={styles.recurrenceButtons}>
-              {[
-                { id: 'daily', label: 'Daily', icon: 'today' as const },
-                { id: 'weekly', label: 'Weekly', icon: 'date-range' as const },
-                { id: 'monthly', label: 'Monthly', icon: 'calendar-today' as const }
-              ].map((type) => (
+            <Text style={[styles.label, isDark && styles.darkText]}>Days</Text>
+            <View style={styles.daysContainer}>
+              {days.map((day) => (
                 <TouchableOpacity
-                  key={type.id}
+                  key={day.id}
                   style={[
-                    styles.recurrenceButton,
-                    isDark && styles.darkRecurrenceButton,
-                    task.recurringType === type.id && (isDark ? styles.darkSelectedRecurrence : styles.selectedRecurrence)
+                    styles.dayButton,
+                    isDark && styles.darkDayButton,
+                    schedule.days.includes(day.id) && (isDark ? styles.darkSelectedDay : styles.selectedDay)
                   ]}
-                  onPress={() => setTask({ ...task, recurringType: type.id as 'daily' | 'weekly' | 'monthly' })}
+                  onPress={() => toggleDay(day.id)}
                 >
-                  <MaterialIcons 
-                    name={type.icon} 
-                    size={20} 
-                    color={task.recurringType === type.id ? (isDark ? '#4CAF50' : '#2196F3') : (isDark ? '#888' : '#666')} 
-                  />
                   <Text
                     style={[
-                      styles.recurrenceButtonText,
+                      styles.dayButtonText,
                       isDark && styles.darkText,
-                      task.recurringType === type.id && (isDark ? styles.darkSelectedText : styles.selectedText)
+                      schedule.days.includes(day.id) && (isDark ? styles.darkSelectedText : styles.selectedText)
                     ]}
                   >
-                    {type.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={[styles.label, isDark && styles.darkText]}>Priority</Text>
-            <View style={styles.priorityButtons}>
-              {[
-                { id: 'low', label: 'Low', color: '#4CAF50', bgColor: '#E8F5E9', darkColor: '#388E3C', icon: 'flag' as const },
-                { id: 'medium', label: 'Medium', color: '#FF9800', bgColor: '#FFF3E0', darkColor: '#F57C00', icon: 'flag' as const },
-                { id: 'high', label: 'High', color: '#F44336', bgColor: '#FFEBEE', darkColor: '#D32F2F', icon: 'flag' as const }
-              ].map((p) => (
-                <TouchableOpacity
-                  key={p.id}
-                  style={[
-                    styles.priorityButton,
-                    isDark && styles.darkPriorityButton,
-                    task.priority === p.id && { 
-                      backgroundColor: isDark ? p.darkColor : p.bgColor,
-                      borderColor: isDark ? p.darkColor : p.color
-                    }
-                  ]}
-                  onPress={() => setTask({ ...task, priority: p.id as 'low' | 'medium' | 'high' })}
-                >
-                  <MaterialIcons 
-                    name={p.icon} 
-                    size={16} 
-                    color={task.priority === p.id ? (isDark ? '#fff' : p.color) : (isDark ? '#888' : '#666')} 
-                  />
-                  <Text
-                    style={[
-                      styles.priorityButtonText,
-                      isDark && styles.darkText,
-                      task.priority === p.id && { color: isDark ? '#fff' : p.color }
-                    ]}
-                  >
-                    {p.label}
+                    {day.label}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -267,9 +235,9 @@ const CreateRecurringTaskScreen = () => {
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.button, styles.createButton]}
-          onPress={handleCreateTask}
+          onPress={handleCreateSchedule}
         >
-          <Text style={styles.createButtonText}>Create Task</Text>
+          <Text style={styles.createButtonText}>Create Schedule</Text>
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -398,35 +366,32 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
   },
-  recurrenceButtons: {
+  daysContainer: {
     flexDirection: 'row',
-    gap: 12,
-  },
-  recurrenceButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-    borderRadius: 12,
+    flexWrap: 'wrap',
     gap: 8,
+  },
+  dayButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    backgroundColor: '#F5F5F5',
     borderWidth: 1,
     borderColor: '#E0E0E0',
-    backgroundColor: '#F5F5F5',
   },
-  darkRecurrenceButton: {
+  darkDayButton: {
     backgroundColor: '#1E1E1E',
     borderColor: '#333',
   },
-  selectedRecurrence: {
+  selectedDay: {
     backgroundColor: '#E3F2FD',
     borderColor: '#2196F3',
   },
-  darkSelectedRecurrence: {
+  darkSelectedDay: {
     backgroundColor: '#1E1E1E',
     borderColor: '#4CAF50',
   },
-  recurrenceButtonText: {
+  dayButtonText: {
     fontSize: 14,
     fontWeight: '500',
     color: '#666',
@@ -438,31 +403,6 @@ const styles = StyleSheet.create({
   darkSelectedText: {
     color: '#4CAF50',
     fontWeight: '600',
-  },
-  priorityButtons: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  priorityButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-    borderRadius: 12,
-    gap: 8,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    backgroundColor: '#F5F5F5',
-  },
-  darkPriorityButton: {
-    backgroundColor: '#1E1E1E',
-    borderColor: '#333',
-  },
-  priorityButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#666',
   },
   footer: {
     flexDirection: 'row',
@@ -515,4 +455,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default CreateRecurringTaskScreen; 
+export default ScheduleScreen; 

@@ -27,4 +27,11 @@ export interface Achievement {
   completed: boolean;
   claimed: boolean;
   points: number;
-} 
+}
+
+const Types = {
+  Task: {} as Task,
+  Achievement: {} as Achievement
+};
+
+export default Types; 

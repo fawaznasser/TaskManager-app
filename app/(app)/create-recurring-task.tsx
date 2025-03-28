@@ -1,3 +1,5 @@
 import CreateRecurringTaskScreen from '../screens/CreateRecurringTaskScreen';
 
-export default CreateRecurringTaskScreen; 
+export default function CreateRecurringTask() {
+  return <CreateRecurringTaskScreen />;
+} 

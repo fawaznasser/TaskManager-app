@@ -740,12 +740,20 @@ const HomeScreen = () => {
           <MaterialIcons name="arrow-back" size={24} color={isDark ? '#fff' : '#333'} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, isDark && styles.darkText]}>Task Manager</Text>
-        <TouchableOpacity
-          onPress={() => router.push('/settings')}
-          style={[styles.settingsButton, isDark && styles.darkButton]}
-        >
-          <MaterialIcons name="settings" size={24} color={isDark ? '#fff' : '#333'} />
-        </TouchableOpacity>
+        <View style={styles.headerButtons}>
+          <TouchableOpacity
+            style={[styles.headerButton, isDark && styles.darkHeaderButton]}
+            onPress={() => router.push("/(app)/settings")}
+          >
+            <MaterialIcons name="settings" size={24} color={isDark ? '#fff' : '#000'} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.headerButton, isDark && styles.darkHeaderButton]}
+            onPress={handleSignOut}
+          >
+            <MaterialIcons name="logout" size={24} color={isDark ? '#fff' : '#000'} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView style={[styles.content, isDark && styles.darkContent]} contentContainerStyle={[styles.contentContainer, isDark && styles.darkContent]}>
@@ -872,6 +880,50 @@ const HomeScreen = () => {
                   onFilter={setStatusFilter}
                   isDark={isDark}
                 />
+                <View style={styles.filterContainer}>
+                  <TouchableOpacity
+                    style={[
+                      styles.filterButton,
+                      isDark && styles.darkFilterButton,
+                      statusFilter === 'all' && styles.filterButtonActive
+                    ]}
+                    onPress={() => setStatusFilter('all')}
+                  >
+                    <Text style={[
+                      styles.filterButtonText,
+                      isDark && styles.darkText,
+                      statusFilter === 'all' && styles.filterButtonTextActive
+                    ]}>All</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.filterButton,
+                      isDark && styles.darkFilterButton,
+                      statusFilter === 'pending' && styles.filterButtonActive
+                    ]}
+                    onPress={() => setStatusFilter('pending')}
+                  >
+                    <Text style={[
+                      styles.filterButtonText,
+                      isDark && styles.darkText,
+                      statusFilter === 'pending' && styles.filterButtonTextActive
+                    ]}>Active</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.filterButton,
+                      isDark && styles.darkFilterButton,
+                      statusFilter === 'completed' && styles.filterButtonActive
+                    ]}
+                    onPress={() => setStatusFilter('completed')}
+                  >
+                    <Text style={[
+                      styles.filterButtonText,
+                      isDark && styles.darkText,
+                      statusFilter === 'completed' && styles.filterButtonTextActive
+                    ]}>Completed</Text>
+                  </TouchableOpacity>
+                </View>
                 <View style={styles.taskListContainer}>
                   <FlatList
                     data={filteredTasks}
@@ -912,8 +964,6 @@ const HomeScreen = () => {
         visible={showMoodCheckup}
         onClose={() => setShowMoodCheckup(false)}
         onMoodSelect={handleMoodSelect}
-        tasks={tasks}
-        onTaskSelect={handleTaskSelect}
         isDark={isDark}
       />
     </View>
@@ -945,10 +995,17 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
   },
-  settingsButton: {
+  headerButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  headerButton: {
     padding: 8,
     borderRadius: 20,
     backgroundColor: '#F5F5F5',
+  },
+  darkHeaderButton: {
+    backgroundColor: '#2C2C2C',
   },
   content: {
     flex: 1,
@@ -1467,6 +1524,48 @@ const styles = StyleSheet.create({
   sessionBadgeText: {
     fontSize: 12,
     fontWeight: 'bold',
+    color: '#fff',
+  },
+  searchContainer: {
+    padding: 16,
+  },
+  searchInput: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 4,
+    padding: 8,
+    marginBottom: 12,
+    fontSize: 16,
+  },
+  darkSearchInput: {
+    backgroundColor: '#333',
+    borderColor: '#555',
+  },
+  filterContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  filterButton: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    backgroundColor: '#F5F5F5',
+    alignItems: 'center',
+  },
+  darkFilterButton: {
+    backgroundColor: '#2C2C2C',
+  },
+  filterButtonActive: {
+    backgroundColor: '#007AFF',
+  },
+  filterButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#666',
+  },
+  filterButtonTextActive: {
     color: '#fff',
   },
 });

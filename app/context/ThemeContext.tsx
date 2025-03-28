@@ -10,7 +10,7 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
+export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setTheme] = useState<Theme>('light');
 
   useEffect(() => {
@@ -30,9 +30,9 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
 
   const toggleTheme = async () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
     try {
       await AsyncStorage.setItem('theme', newTheme);
-      setTheme(newTheme);
     } catch (error) {
       console.error('Error saving theme:', error);
     }
@@ -51,4 +51,6 @@ export const useTheme = () => {
     throw new Error('useTheme must be used within a ThemeProvider');
   }
   return context;
-}; 
+};
+
+export default ThemeContext;

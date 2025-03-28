@@ -1,14 +1,11 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, ScrollView } from 'react-native';
-import { Task } from '@/types';
+import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 
 interface MoodCheckupProps {
   visible: boolean;
   onClose: () => void;
   onMoodSelect: (mood: string) => void;
-  tasks: Task[];
-  onTaskSelect: (taskId: string) => void;
   isDark: boolean;
 }
 
@@ -20,9 +17,7 @@ const MOODS = [
   { id: 'productive', icon: '💪', label: 'Productive' }
 ];
 
-const MoodCheckup = ({ visible, onClose, onMoodSelect, tasks, onTaskSelect, isDark }: MoodCheckupProps) => {
-  const suggestedTasks = tasks.filter(task => !task.completed).slice(0, 3);
-
+const MoodCheckup = ({ visible, onClose, onMoodSelect, isDark }: MoodCheckupProps) => {
   return (
     <Modal visible={visible} animationType="slide" transparent>
       <View style={[styles.modalContainer, isDark && styles.darkContainer]}>
@@ -47,39 +42,6 @@ const MoodCheckup = ({ visible, onClose, onMoodSelect, tasks, onTaskSelect, isDa
                 <Text style={[styles.moodText, isDark && styles.darkText]}>{mood.label}</Text>
               </TouchableOpacity>
             ))}
-          </View>
-
-          <View style={styles.suggestionsSection}>
-            <Text style={[styles.sectionTitle, isDark && styles.darkText]}>Suggested Tasks</Text>
-            <ScrollView style={styles.taskList}>
-              {suggestedTasks.length > 0 ? (
-                suggestedTasks.map(task => (
-                  <TouchableOpacity
-                    key={task.id}
-                    style={[styles.taskItem, isDark && styles.darkTaskItem]}
-                    onPress={() => onTaskSelect(task.id)}
-                  >
-                    <View style={styles.taskInfo}>
-                      <Text style={[styles.taskTitle, isDark && styles.darkText]}>{task.title}</Text>
-                      {task.description && (
-                        <Text style={[styles.taskDescription, isDark && styles.darkSubText]} numberOfLines={1}>
-                          {task.description}
-                        </Text>
-                      )}
-                    </View>
-                    <MaterialIcons 
-                      name="chevron-right" 
-                      size={24} 
-                      color={isDark ? '#666' : '#999'} 
-                    />
-                  </TouchableOpacity>
-                ))
-              ) : (
-                <Text style={[styles.noTasksText, isDark && styles.darkSubText]}>
-                  No tasks available
-                </Text>
-              )}
-            </ScrollView>
           </View>
         </View>
       </View>
@@ -163,56 +125,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
     fontWeight: '500',
-  },
-  suggestionsSection: {
-    marginTop: 24,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 12,
-  },
-  taskList: {
-    maxHeight: 200,
-  },
-  taskItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 12,
-    backgroundColor: '#F5F5F5',
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  darkTaskItem: {
-    backgroundColor: '#2C2C2C',
-    borderColor: '#404040',
-    borderWidth: 1,
-  },
-  taskInfo: {
-    flex: 1,
-    marginRight: 12,
-  },
-  taskTitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
-    marginBottom: 4,
-  },
-  taskDescription: {
-    fontSize: 14,
-    color: '#666',
-  },
-  darkSubText: {
-    color: '#999',
-  },
-  noTasksText: {
-    fontSize: 14,
-    color: '#666',
-    fontStyle: 'italic',
-    textAlign: 'center',
-    padding: 16,
   },
 });
 
