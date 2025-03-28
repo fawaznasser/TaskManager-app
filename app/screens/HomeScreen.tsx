@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   ScrollView,
   Dimensions,
+  Platform,
 } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { signOut } from "firebase/auth";
@@ -18,14 +19,17 @@ import { router } from "expo-router";
 import { collection, getDocs, addDoc, Timestamp, query, where, updateDoc, doc, orderBy, deleteDoc } from "firebase/firestore";
 import { Task } from "@/types";
 import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
-import { BarChart } from "react-native-chart-kit";
-import PomodoroTimer from '../../components/PomodoroTimer';
-import TaskFilters from '../../components/TaskFilters';
-import { Achievement, Achievements } from '../../components/Achievements';
+import { BarChart, PieChart } from "react-native-chart-kit";
+import TaskFilters from '@/components/TaskFilters';
+import { Achievement } from '@/types';
+import Achievements from '@/components/Achievements';
 import MoodBasedTasks from '../../components/MoodBasedTasks';
-import RecurringTaskForm from '../../components/RecurringTaskForm';
-import VoiceCommandButton from '../../components/VoiceCommandButton';
+import RecurringTaskForm from '@/components/RecurringTaskForm';
+import VoiceCommandButton from '@/components/VoiceCommandButton';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import MoodBasedSuggestions from '@/components/MoodBasedSuggestions';
+import MoodCheckup from '@/components/MoodCheckup';
+import { useTheme } from '../context/ThemeContext';
 
 const MOODS = [
   { id: 'happy', icon: '😊', label: 'Happy' },
@@ -74,34 +78,18 @@ const INITIAL_ACHIEVEMENTS: Achievement[] = [
     completed: false,
     claimed: false,
     points: 150,
-  },
-  {
-    id: 'pomodoro_master',
-    title: 'Focus Champion',
-    description: 'Complete 5 Pomodoro sessions',
-    icon: 'timer',
-    progress: 0,
-    total: 5,
-    completed: false,
-    claimed: false,
-    points: 200,
-  },
+  }
 ];
 
 const HomeScreen = () => {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
-  const [newTaskTitle, setNewTaskTitle] = useState("");
-  const [newTaskDescription, setNewTaskDescription] = useState("");
-  const [newTaskDeadline, setNewTaskDeadline] = useState(new Date());
-  const [newTaskPriority, setNewTaskPriority] = useState<"high" | "medium" | "low">("medium");
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showTimePicker, setShowTimePicker] = useState(false);
   const [currentMood, setCurrentMood] = useState<string | null>(null);
   const [showMoodPicker, setShowMoodPicker] = useState(false);
   const [lastMoodSelectionDate, setLastMoodSelectionDate] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'tasks' | 'analytics' | 'achievements'>('tasks');
-  const [showPomodoro, setShowPomodoro] = useState(false);
   const [filteredTasks, setFilteredTasks] = useState<Task[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'in_progress' | 'completed'>('all');
@@ -111,12 +99,11 @@ const HomeScreen = () => {
   const [showRecurringForm, setShowRecurringForm] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [showVoiceInput, setShowVoiceInput] = useState(false);
-  const [selectedMood, setSelectedMood] = useState<string | null>(null);
-  const [showNewTask, setShowNewTask] = useState(false);
-  const [newTask, setNewTask] = useState({ title: '', description: '', deadline: new Date(), priority: 'medium' });
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [moodSelectionCount, setMoodSelectionCount] = useState(0);
   const [lastMoodSelectionTime, setLastMoodSelectionTime] = useState<string | null>(null);
+  const [showMoodCheckup, setShowMoodCheckup] = useState(false);
+  const [pomodoroSessions, setPomodoroSessions] = useState(0);
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user: any) => {
@@ -138,7 +125,6 @@ const HomeScreen = () => {
         const lastSelection = await AsyncStorage.getItem('lastMoodSelectionTime');
         const count = await AsyncStorage.getItem('moodSelectionCount');
         
-        // Reset count if it's a new day
         if (lastSelection && !lastSelection.startsWith(today)) {
           await AsyncStorage.setItem('moodSelectionCount', '0');
           setMoodSelectionCount(0);
@@ -241,95 +227,100 @@ const HomeScreen = () => {
     setAchievements(updatedAchievements);
   }, [tasks]);
 
-    const fetchTasks = async () => {
-      try {
-      setLoading(true);
+  const fetchTasks = async () => {
+    try {
+      const userId = auth.currentUser?.uid;
+      if (!userId) {
+        router.replace('/(auth)/login');
+        return;
+      }
+
       const q = query(
         collection(db, 'tasks'),
-        where('userId', '==', auth.currentUser?.uid)
+        where('userId', '==', userId),
+        orderBy('createdAt', 'desc')
       );
-      
+
       const querySnapshot = await getDocs(q);
-      const fetchedTasks = querySnapshot.docs.map(doc => {
-          const data = doc.data();
+      const fetchedTasks: Task[] = querySnapshot.docs.map(doc => {
+        const data = doc.data();
         return {
           id: doc.id,
           title: data.title,
           description: data.description,
-          dueDate: data.deadline?.toDate(),
+          deadline: data.deadline,
+          dueDate: data.deadline ? new Date(data.deadline.seconds * 1000) : undefined,
           priority: data.priority,
           category: data.category,
-          createdAt: data.createdAt.toDate(),
+          createdAt: new Date(data.createdAt.seconds * 1000),
           completed: data.completed || false,
           status: data.status || 'pending',
-          userId: data.userId
-        } as Task;
+          userId: data.userId,
+          completedAt: data.completedAt ? new Date(data.completedAt.seconds * 1000) : undefined,
+          isRecurring: data.isRecurring || false
+        };
       });
 
       setTasks(fetchedTasks);
       setFilteredTasks(fetchedTasks);
+      setLoading(false);
     } catch (error) {
       console.error('Error fetching tasks:', error);
-      Alert.alert('Error', 'Failed to fetch tasks. Please try again.');
-    } finally {
-      setLoading(false);
-      }
-    };
-
-  const handleAddTask = async () => {
-    if (!newTaskTitle.trim() || !newTaskDescription.trim()) {
-      Alert.alert("Error", "Please fill in all fields");
-      return;
-    }
-
-    try {
-      const userId = auth.currentUser?.uid;
-      if (!userId) {
-        router.replace("/(auth)/login");
-        return;
-      }
-
-      setLoading(true);
-      const category = categorizeTask(newTaskTitle);
-      
-      await addDoc(collection(db, "tasks"), {
-        title: newTaskTitle,
-        description: newTaskDescription,
-        deadline: Timestamp.fromDate(newTaskDeadline),
-        priority: newTaskPriority,
-        status: TASK_STATUS.PENDING,
-        category,
-        userId,
-        createdAt: Timestamp.now(),
-        completed: false,
-        isRecurring: false,
-        mood: currentMood
-      });
-
-      setNewTaskTitle("");
-      setNewTaskDescription("");
-      setNewTaskDeadline(new Date());
-      setNewTaskPriority("medium");
-      await fetchTasks();
-    } catch (error) {
-      console.error("Error adding task:", error);
-      Alert.alert("Error", "Failed to add task. Please try again.");
-    } finally {
       setLoading(false);
     }
   };
 
-  const handleUpdateTaskStatus = async (taskId: string, newStatus: string) => {
+  const handleUpdateTaskStatus = async (taskId: string, currentStatus: string = TASK_STATUS.PENDING) => {
     try {
       const taskRef = doc(db, "tasks", taskId);
+      let newStatus;
+      
+      switch (currentStatus) {
+        case TASK_STATUS.PENDING:
+          newStatus = TASK_STATUS.IN_PROGRESS;
+          break;
+        case TASK_STATUS.IN_PROGRESS:
+          newStatus = TASK_STATUS.COMPLETED;
+          break;
+        case TASK_STATUS.COMPLETED:
+          newStatus = TASK_STATUS.PENDING;
+          break;
+        default:
+          newStatus = TASK_STATUS.PENDING;
+      }
+
       await updateDoc(taskRef, {
         status: newStatus,
+        completed: newStatus === TASK_STATUS.COMPLETED,
         completedAt: newStatus === TASK_STATUS.COMPLETED ? Timestamp.now() : null
       });
+
       await fetchTasks();
     } catch (error) {
       console.error("Error updating task status:", error);
       Alert.alert("Error", "Failed to update task status. Please try again.");
+    }
+  };
+
+  const getStatusIcon = (status: string = TASK_STATUS.PENDING) => {
+    switch (status) {
+      case TASK_STATUS.COMPLETED:
+        return "check-circle";
+      case TASK_STATUS.IN_PROGRESS:
+        return "pending";
+      default:
+        return "radio-button-unchecked";
+    }
+  };
+
+  const getStatusColor = (status: string = TASK_STATUS.PENDING) => {
+    switch (status) {
+      case TASK_STATUS.COMPLETED:
+        return "#4CAF50";
+      case TASK_STATUS.IN_PROGRESS:
+        return "#FFC107";
+      default:
+        return "#757575";
     }
   };
 
@@ -406,7 +397,7 @@ const HomeScreen = () => {
       
       await addDoc(collection(db, "tasks"), {
         title: taskData.title,
-        description: taskData.description,
+        description: taskData.description || '',
         deadline: Timestamp.fromDate(taskData.deadline),
         priority: taskData.priority,
         category,
@@ -418,7 +409,7 @@ const HomeScreen = () => {
         recurringType: taskData.recurringType,
         recurringInterval: taskData.recurringInterval,
         recurringEndDate: taskData.recurringEndDate ? Timestamp.fromDate(taskData.recurringEndDate) : null,
-        mood: currentMood
+        mood: currentMood || null
       });
 
       setShowRecurringForm(false);
@@ -441,222 +432,293 @@ const HomeScreen = () => {
     // You can add logic here to create a task from the voice command
   };
 
+  const handleMoodSelect = (mood: string) => {
+    setCurrentMood(mood);
+    setShowMoodCheckup(false);
+  };
+
+  const handleBackPress = () => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: handleSignOut
+        }
+      ]
+    );
+  };
+
+  const handleTaskCompletion = async () => {
+    try {
+      // Update achievements progress
+      const updatedAchievements = achievements.map(achievement => {
+        if (achievement.id === 'first_task' && !achievement.completed) {
+          return { ...achievement, progress: 1, completed: true };
+        }
+        if (achievement.id === 'task_master') {
+          const newProgress = Math.min(achievement.progress + 1, achievement.total);
+          return {
+            ...achievement,
+            progress: newProgress,
+            completed: newProgress >= achievement.total
+          };
+        }
+        return achievement;
+      });
+
+      setAchievements(updatedAchievements);
+
+      // Check for daily task completion achievement
+      const today = new Date().toDateString();
+      const completedToday = tasks.filter(task => 
+        task.completed && 
+        task.completedAt?.toDateString() === today
+      ).length;
+
+      if (completedToday >= 5) {
+        const productiveDayAchievement = updatedAchievements.find(a => a.id === 'productive_day');
+        if (productiveDayAchievement && !productiveDayAchievement.completed) {
+          setAchievements(prev => prev.map(a => 
+            a.id === 'productive_day' 
+              ? { ...a, progress: a.total, completed: true }
+              : a
+          ));
+        }
+      }
+    } catch (error) {
+      console.error('Error updating achievements:', error);
+    }
+  };
+
+  const handleTaskComplete = async (task: Task) => {
+    try {
+      const taskRef = doc(db, 'tasks', task.id);
+      const newStatus = !task.completed ? 'completed' as const : 'pending' as const;
+      
+      await updateDoc(taskRef, {
+        completed: !task.completed,
+        status: newStatus,
+        completedAt: !task.completed ? Timestamp.now() : null
+      });
+      
+      // Update local state
+      setTasks(tasks.map(t => 
+        t.id === task.id 
+          ? { ...t, completed: !t.completed, status: newStatus }
+          : t
+      ));
+
+      // Update achievements if task is completed
+      if (!task.completed) {
+        handleTaskCompletion();
+      }
+    } catch (error) {
+      console.error('Error updating task:', error);
+      Alert.alert('Error', 'Failed to update task status');
+    }
+  };
+
   const renderTaskItem = ({ item }: { item: Task }) => (
     <View style={[
       styles.taskItem,
       item.priority === 'high' && styles.highPriorityTask,
       item.priority === 'medium' && styles.mediumPriorityTask,
       item.priority === 'low' && styles.lowPriorityTask,
+      isDark && styles.darkTaskItem
     ]}>
       <View style={styles.taskHeader}>
         <Text style={[
           styles.taskTitle,
-          item.priority === 'high' && styles.highPriorityText,
-          item.priority === 'medium' && styles.mediumPriorityText,
-          item.priority === 'low' && styles.lowPriorityText,
-        ]}>{item.title}</Text>
+          item.completed && styles.completedTaskTitle,
+          isDark && styles.darkText
+        ]}>
+          {item.title}
+        </Text>
         <View style={styles.taskActions}>
-          <TouchableOpacity
-            onPress={() => handleUpdateTaskStatus(item.id, TASK_STATUS.COMPLETED)}
-            style={styles.actionButton}
-          >
-            <MaterialIcons name="check-circle-outline" size={24} color="#4CAF50" />
+          <TouchableOpacity onPress={() => handleTaskComplete(item)}>
+            <MaterialIcons
+              name={item.completed ? "check-circle" : "radio-button-unchecked"}
+              size={24}
+              color={isDark ? (item.completed ? "#4CAF50" : "#666") : (item.completed ? "#4CAF50" : "#333")}
+            />
           </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => handleDeleteTask(item.id)}
-            style={styles.actionButton}
-          >
-            <MaterialIcons name="delete-outline" size={24} color="#F44336" />
+          <TouchableOpacity onPress={() => handleDeleteTask(item.id)}>
+            <MaterialIcons name="delete" size={24} color={isDark ? "#666" : "#333"} />
           </TouchableOpacity>
         </View>
       </View>
-      <Text style={styles.taskDescription}>{item.description}</Text>
+      {item.description ? (
+        <Text style={[styles.taskDescription, isDark && styles.darkText]}>
+          {item.description}
+        </Text>
+      ) : null}
       <View style={styles.taskFooter}>
-        <View style={styles.taskMeta}>
-          <MaterialIcons name="category" size={16} color="#666" />
-          <Text style={styles.taskMetaText}>{item.category}</Text>
-        </View>
-        <View style={styles.taskMeta}>
-          <MaterialIcons name="schedule" size={16} color="#666" />
-          <Text style={styles.taskMetaText}>
-            {item.dueDate?.toLocaleDateString() || 'No date'}
+        <View style={[styles.taskMeta, isDark && styles.darkTaskMeta]}>
+          <MaterialIcons name="event" size={16} color={isDark ? "#666" : "#333"} />
+          <Text style={[styles.taskMetaText, isDark && styles.darkText]}>
+            {new Date(item.deadline.seconds * 1000).toLocaleDateString()}
           </Text>
         </View>
-        <View style={[
-          styles.taskMeta,
-          item.priority === 'high' && styles.highPriorityBadge,
-          item.priority === 'medium' && styles.mediumPriorityBadge,
-          item.priority === 'low' && styles.lowPriorityBadge,
-        ]}>
-          <MaterialIcons 
-            name="flag" 
-            size={16} 
-            color={
-              item.priority === 'high' ? '#f44336' :
-              item.priority === 'medium' ? '#ff9800' :
-              '#4caf50'
-            } 
-          />
-          <Text style={[
-            styles.taskMetaText,
-            item.priority === 'high' && styles.highPriorityText,
-            item.priority === 'medium' && styles.mediumPriorityText,
-            item.priority === 'low' && styles.lowPriorityText,
-          ]}>{item.priority}</Text>
+        <View style={[styles.taskStatus, isDark && styles.darkTaskStatus]}>
+          <View style={[
+            styles.statusIndicator,
+            { backgroundColor: item.completed ? "#4CAF50" : "#FFC107" }
+          ]} />
+          <Text style={[styles.statusText, isDark && styles.darkText]}>
+            {item.completed ? "Completed" : "In Progress"}
+          </Text>
         </View>
-      </View>
-      <View style={styles.taskStatus}>
-        <View style={[
-          styles.statusIndicator,
-          { backgroundColor: item.completed ? '#4CAF50' : '#FFC107' }
-        ]} />
-        <Text style={styles.statusText}>{item.completed ? 'Completed' : 'In Progress'}</Text>
       </View>
     </View>
   );
 
-  const renderAnalytics = () => {
+  const renderAnalytics = (isDark: boolean) => {
+    // Get current date and calculate date ranges
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - now.getDay());
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    // Filter tasks by time periods
+    const weeklyTasks = tasks.filter(task => 
+      task.createdAt && new Date(task.createdAt) >= startOfWeek
+    );
+    const monthlyTasks = tasks.filter(task => 
+      task.createdAt && new Date(task.createdAt) >= startOfMonth
+    );
+
+    // Calculate completion rates
+    const weeklyCompletionRate = weeklyTasks.length > 0 
+      ? (weeklyTasks.filter(task => task.completed).length / weeklyTasks.length) * 100 
+      : 0;
+    const monthlyCompletionRate = monthlyTasks.length > 0 
+      ? (monthlyTasks.filter(task => task.completed).length / monthlyTasks.length) * 100 
+      : 0;
+
+    // Group tasks by category
     const categoryData = tasks.reduce((acc: { [key: string]: number }, task) => {
       acc[task.category ?? 'other'] = (acc[task.category ?? 'other'] || 0) + 1;
       return acc;
     }, {});
 
-    const chartData = {
+    // Prepare chart data
+    const categoryChartData = {
       labels: Object.keys(categoryData),
       datasets: [{
         data: Object.values(categoryData) as number[]
       }]
-  };
+    };
 
-  return (
+    // Calculate tasks by priority
+    const priorityData = tasks.reduce((acc: { [key: string]: number }, task) => {
+      acc[task.priority] = (acc[task.priority] || 0) + 1;
+      return acc;
+    }, {});
+
+    const priorityChartData = {
+      labels: Object.keys(priorityData),
+      datasets: [{
+        data: Object.values(priorityData) as number[]
+      }]
+    };
+
+    return (
       <ScrollView style={styles.analyticsContainer}>
         <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{tasks.length}</Text>
-            <Text style={styles.statLabel}>Total Tasks</Text>
+          <View style={[styles.statCard, isDark && styles.darkStatCard]}>
+            <Text style={[styles.statNumber, isDark && styles.darkStatNumber]}>{tasks.length}</Text>
+            <Text style={[styles.statLabel, isDark && styles.darkText]}>Total Tasks</Text>
           </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>
+          <View style={[styles.statCard, isDark && styles.darkStatCard]}>
+            <Text style={[styles.statNumber, isDark && styles.darkStatNumber]}>
               {tasks.filter(task => task.completed).length}
             </Text>
-            <Text style={styles.statLabel}>Completed</Text>
+            <Text style={[styles.statLabel, isDark && styles.darkText]}>Completed</Text>
           </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>
+          <View style={[styles.statCard, isDark && styles.darkStatCard]}>
+            <Text style={[styles.statNumber, isDark && styles.darkStatNumber]}>
               {tasks.filter(task => !task.completed).length}
             </Text>
-            <Text style={styles.statLabel}>In Progress</Text>
+            <Text style={[styles.statLabel, isDark && styles.darkText]}>In Progress</Text>
           </View>
         </View>
 
-        <View style={styles.chartContainer}>
-          <Text style={styles.chartTitle}>Tasks by Category</Text>
+        <View style={styles.periodStatsContainer}>
+          <View style={[styles.periodCard, isDark && styles.darkPeriodCard]}>
+            <Text style={[styles.periodTitle, isDark && styles.darkText]}>This Week</Text>
+            <Text style={[styles.periodNumber, isDark && styles.darkStatNumber]}>{weeklyTasks.length}</Text>
+            <Text style={[styles.periodLabel, isDark && styles.darkText]}>Tasks</Text>
+            <View style={[styles.progressBar, isDark && styles.darkProgressBar]}>
+              <View style={[styles.progressFill, { width: `${weeklyCompletionRate}%` }]} />
+            </View>
+            <Text style={[styles.completionRate, isDark && styles.darkText]}>{weeklyCompletionRate.toFixed(1)}% Complete</Text>
+          </View>
+          <View style={[styles.periodCard, isDark && styles.darkPeriodCard]}>
+            <Text style={[styles.periodTitle, isDark && styles.darkText]}>This Month</Text>
+            <Text style={[styles.periodNumber, isDark && styles.darkStatNumber]}>{monthlyTasks.length}</Text>
+            <Text style={[styles.periodLabel, isDark && styles.darkText]}>Tasks</Text>
+            <View style={[styles.progressBar, isDark && styles.darkProgressBar]}>
+              <View style={[styles.progressFill, { width: `${monthlyCompletionRate}%` }]} />
+            </View>
+            <Text style={[styles.completionRate, isDark && styles.darkText]}>{monthlyCompletionRate.toFixed(1)}% Complete</Text>
+          </View>
+        </View>
+
+        <View style={[styles.chartContainer, isDark && styles.darkChartContainer]}>
+          <Text style={[styles.chartTitle, isDark && styles.darkText]}>Tasks by Category</Text>
           <BarChart
-            data={chartData}
+            data={categoryChartData}
             width={Dimensions.get('window').width - 40}
             height={220}
             yAxisLabel=""
             yAxisSuffix=" tasks"
             chartConfig={{
-              backgroundColor: '#ffffff',
-              backgroundGradientFrom: '#ffffff',
-              backgroundGradientTo: '#ffffff',
+              backgroundColor: isDark ? '#1E1E1E' : '#ffffff',
+              backgroundGradientFrom: isDark ? '#1E1E1E' : '#ffffff',
+              backgroundGradientTo: isDark ? '#1E1E1E' : '#ffffff',
               decimalPlaces: 0,
-              color: (opacity = 1) => `rgba(33, 150, 243, ${opacity})`,
+              color: (opacity = 1) => isDark ? `rgba(255, 255, 255, ${opacity})` : `rgba(33, 150, 243, ${opacity})`,
+              labelColor: (opacity = 1) => isDark ? `rgba(255, 255, 255, ${opacity})` : `rgba(0, 0, 0, ${opacity})`,
               style: {
                 borderRadius: 16
-              }
+              },
+              barPercentage: 0.8
             }}
             style={styles.chart}
           />
         </View>
-      </ScrollView>
-    );
-  };
 
-  const renderMoodPicker = () => (
-      <View style={styles.modalContainer}>
-      <View style={styles.modalContent}>
-        <Text style={styles.modalTitle}>Select Your Mood</Text>
-        <Text style={styles.moodSubtitle}>Check-in {moodSelectionCount}/3</Text>
-          <View style={styles.moodButtons}>
-            {MOODS.map((mood) => (
-              <TouchableOpacity
-                key={mood.id}
-                style={[
-                  styles.moodButton,
-                  currentMood === mood.id && styles.selectedMoodButton,
-                ]}
-              onPress={() => {
-                setSelectedMood(mood.id);
-                setShowMoodPicker(false);
-              }}
-              >
-                <Text style={styles.moodIcon}>{mood.icon}</Text>
-                <Text style={styles.moodLabel}>{mood.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      </View>
-    );
-
-  const renderMoodBasedSuggestions = () => {
-    if (!selectedMood) return null;
-
-    const suggestedTasks = tasks.filter((task) => {
-      if (selectedMood === "energetic") {
-        return task.priority === "high" && !task.completed;
-      } else if (selectedMood === "focused") {
-        return task.priority === "medium" && !task.completed;
-      } else if (selectedMood === "tired") {
-        return task.priority === "low" && !task.completed;
-      }
-      return false;
-    });
-
-    if (suggestedTasks.length === 0) return null;
-
-    return (
-      <View style={styles.suggestionsContainer}>
-        <Text style={styles.suggestionsTitle}>Task Suggestions</Text>
-        {showSuggestions && (
-          <View style={styles.suggestionsList}>
-            {suggestedTasks.map((task) => (
-              <TouchableOpacity
-                key={task.id}
-                style={[
-                  styles.suggestionItem,
-                  task.priority === 'high' && styles.highPriorityTask,
-                  task.priority === 'medium' && styles.mediumPriorityTask,
-                  task.priority === 'low' && styles.lowPriorityTask,
-                ]}
-                onPress={() => handleTaskSelect(task.id)}
-              >
-                <Text style={styles.suggestionTitle} numberOfLines={1}>
-                  {task.title}
-                </Text>
-                <Text style={styles.suggestionCategory}>
-                  {task.category || 'Other'}
-                </Text>
-            </TouchableOpacity>
-        ))}
-    </View>
-        )}
-        <TouchableOpacity 
-          style={styles.toggleButton}
-          onPress={() => setShowSuggestions(!showSuggestions)}
-        >
-          <Text style={styles.toggleButtonText}>
-            {showSuggestions ? 'Hide Suggestions' : 'Show Suggestions'}
-          </Text>
-          <MaterialIcons 
-            name={showSuggestions ? "expand-less" : "expand-more"} 
-            size={24} 
-            color="#666" 
+        <View style={[styles.chartContainer, isDark && styles.darkChartContainer]}>
+          <Text style={[styles.chartTitle, isDark && styles.darkText]}>Tasks by Priority</Text>
+          <PieChart
+            data={Object.entries(priorityData).map(([priority, count]) => ({
+              name: priority.charAt(0).toUpperCase() + priority.slice(1),
+              count,
+              color: priority === 'high' ? '#FF6B6B' : 
+                     priority === 'medium' ? '#FFD93D' : '#6BCB77',
+              legendFontColor: isDark ? '#fff' : '#7F7F7F',
+            }))}
+            width={Dimensions.get('window').width - 40}
+            height={220}
+            chartConfig={{
+              color: (opacity = 1) => isDark ? `rgba(255, 255, 255, ${opacity})` : `rgba(0, 0, 0, ${opacity})`,
+              labelColor: (opacity = 1) => isDark ? `rgba(255, 255, 255, ${opacity})` : `rgba(0, 0, 0, ${opacity})`,
+            }}
+            accessor="count"
+            backgroundColor="transparent"
+            paddingLeft="15"
+            absolute
+            style={styles.chart}
           />
-        </TouchableOpacity>
-      </View>
+        </View>
+      </ScrollView>
     );
   };
 
@@ -669,127 +731,132 @@ const HomeScreen = () => {
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-          <Text style={styles.headerTitle}>Task Manager</Text>
-        <TouchableOpacity onPress={handleSignOut} style={styles.signOutButton}>
-          <MaterialIcons name="logout" size={24} color="#FF6B6B" />
-          </TouchableOpacity>
-        </View>
+    <View style={[styles.container, isDark && styles.darkContainer]}>
+      <View style={[styles.header, isDark && styles.darkHeader]}>
+        <TouchableOpacity
+          onPress={handleBackPress}
+          style={[styles.backButton, isDark && styles.darkButton]}
+        >
+          <MaterialIcons name="arrow-back" size={24} color={isDark ? '#fff' : '#333'} />
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, isDark && styles.darkText]}>Task Manager</Text>
+        <TouchableOpacity
+          onPress={() => router.push('/settings')}
+          style={[styles.settingsButton, isDark && styles.darkButton]}
+        >
+          <MaterialIcons name="settings" size={24} color={isDark ? '#fff' : '#333'} />
+        </TouchableOpacity>
+      </View>
 
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-        {/* Mood Section */}
-        {showMoodPicker && (
-          <View style={styles.moodCard}>
-            <Text style={styles.cardTitle}>How are you feeling today?</Text>
-            <Text style={styles.moodSubtitle}>Check-in {moodSelectionCount}/3</Text>
-            <View style={styles.moodButtons}>
-              {MOODS.map((mood) => (
-                <TouchableOpacity
-                  key={mood.id}
-                  style={[
-                    styles.moodButton,
-                    currentMood === mood.id && styles.selectedMoodButton,
-                  ]}
-                  onPress={() => {
-                    setSelectedMood(mood.id);
-                    setShowMoodPicker(false);
-                  }}
-                >
-                  <Text style={styles.moodIcon}>{mood.icon}</Text>
-                  <Text style={styles.moodLabel}>{mood.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {/* Task Suggestions */}
-        {selectedMood && renderMoodBasedSuggestions()}
+      <ScrollView style={[styles.content, isDark && styles.darkContent]} contentContainerStyle={[styles.contentContainer, isDark && styles.darkContent]}>
+        <MoodBasedSuggestions
+          tasks={tasks}
+          currentMood={currentMood}
+          onSelectTask={handleTaskSelect}
+          onOpenMoodCheckup={() => setShowMoodCheckup(true)}
+          isDark={isDark}
+        />
 
         {/* Quick Actions */}
-        <View style={styles.quickActionsCard}>
+        <View style={[styles.quickActionsCard, isDark && styles.darkCard]}>
           <View style={styles.quickActionsGrid}>
             <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => setShowNewTask(true)}
+              style={[styles.actionButton, isDark && styles.darkActionButton]}
+              onPress={() => router.push('/create-task')}
             >
-              <View style={[styles.actionIcon, { backgroundColor: '#E8F5E9' }]}>
-                <MaterialIcons name="add" size={24} color="#4CAF50" />
+              <View style={[styles.actionIcon, isDark && styles.darkActionIcon, { backgroundColor: isDark ? '#1E1E1E' : '#E8F5E9' }]}>
+                <MaterialIcons name="add" size={24} color={isDark ? '#4CAF50' : '#4CAF50'} />
               </View>
-              <Text style={styles.actionButtonText}>New Task</Text>
+              <Text style={[styles.actionButtonText, isDark && styles.darkText]}>New Task</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => setShowRecurringForm(true)}
+              style={[styles.actionButton, isDark && styles.darkActionButton]}
+              onPress={() => router.push('/create-recurring-task')}
             >
-              <View style={[styles.actionIcon, { backgroundColor: '#E3F2FD' }]}>
-                <MaterialIcons name="repeat" size={24} color="#2196F3" />
+              <View style={[styles.actionIcon, isDark && styles.darkActionIcon, { backgroundColor: isDark ? '#1E1E1E' : '#E3F2FD' }]}>
+                <MaterialIcons name="repeat" size={24} color={isDark ? '#2196F3' : '#2196F3'} />
               </View>
-              <Text style={styles.actionButtonText}>Recurring</Text>
+              <Text style={[styles.actionButtonText, isDark && styles.darkText]}>Recurring Task</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => setShowPomodoro(true)}
+              style={[styles.actionButton, isDark && styles.darkActionButton]}
+              onPress={() => router.push('/pomodoro')}
             >
-              <View style={[styles.actionIcon, { backgroundColor: '#F3E5F5' }]}>
-                <MaterialIcons name="timer" size={24} color="#9C27B0" />
+              <View style={[styles.actionIcon, isDark && styles.darkActionIcon, { backgroundColor: isDark ? '#1E1E1E' : '#F3E5F5' }]}>
+                <MaterialIcons name="timer" size={24} color={isDark ? '#9C27B0' : '#9C27B0'} />
+                {pomodoroSessions > 0 && (
+                  <View style={styles.sessionBadge}>
+                    <Text style={styles.sessionBadgeText}>{pomodoroSessions}</Text>
+                  </View>
+                )}
               </View>
-              <Text style={styles.actionButtonText}>Pomodoro</Text>
+              <Text style={[styles.actionButtonText, isDark && styles.darkText]}>Pomodoro</Text>
             </TouchableOpacity>
-            <View style={styles.actionButton}>
-              <VoiceCommandButton onTaskCreated={handleVoiceCommand} />
+            <View style={[styles.actionButton, isDark && styles.darkActionButton]}>
+              <VoiceCommandButton onTaskCreated={handleVoiceCommand} isDark={isDark} />
             </View>
           </View>
         </View>
 
         {/* Main Content Tabs */}
-        <View style={styles.mainContent}>
-          <View style={styles.tabButtons}>
+        <View style={[styles.mainContent, isDark && styles.darkCard]}>
+          <View style={[styles.tabButtons, isDark && styles.darkTabButtons]}>
             <TouchableOpacity
-              style={[styles.tabButton, activeTab === 'tasks' && styles.activeTabButton]}
+              style={[
+                styles.tabButton,
+                activeTab === 'tasks' && [styles.activeTabButton, isDark && { backgroundColor: '#333' }]
+              ]}
               onPress={() => setActiveTab('tasks')}
             >
               <MaterialIcons 
                 name="list" 
                 size={24} 
-                color={activeTab === 'tasks' ? '#4CAF50' : '#666'} 
+                color={activeTab === 'tasks' ? '#4CAF50' : (isDark ? '#666' : '#666')} 
               />
               <Text style={[
                 styles.tabButtonText, 
-                activeTab === 'tasks' && styles.activeTabButtonText
+                activeTab === 'tasks' && styles.activeTabButtonText,
+                isDark && styles.darkText
               ]}>
                 Tasks
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.tabButton, activeTab === 'analytics' && styles.activeTabButton]}
+              style={[
+                styles.tabButton,
+                activeTab === 'analytics' && [styles.activeTabButton, isDark && { backgroundColor: '#333' }]
+              ]}
               onPress={() => setActiveTab('analytics')}
             >
               <MaterialIcons 
                 name="analytics" 
                 size={24} 
-                color={activeTab === 'analytics' ? '#4CAF50' : '#666'} 
+                color={activeTab === 'analytics' ? '#4CAF50' : (isDark ? '#666' : '#666')} 
               />
               <Text style={[
                 styles.tabButtonText, 
-                activeTab === 'analytics' && styles.activeTabButtonText
+                activeTab === 'analytics' && styles.activeTabButtonText,
+                isDark && styles.darkText
               ]}>
                 Analytics
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.tabButton, activeTab === 'achievements' && styles.activeTabButton]}
+              style={[
+                styles.tabButton,
+                activeTab === 'achievements' && [styles.activeTabButton, isDark && { backgroundColor: '#333' }]
+              ]}
               onPress={() => setActiveTab('achievements')}
             >
               <MaterialIcons 
                 name="emoji-events" 
                 size={24} 
-                color={activeTab === 'achievements' ? '#4CAF50' : '#666'} 
+                color={activeTab === 'achievements' ? '#4CAF50' : (isDark ? '#666' : '#666')} 
               />
               <Text style={[
                 styles.tabButtonText, 
-                activeTab === 'achievements' && styles.activeTabButtonText
+                activeTab === 'achievements' && styles.activeTabButtonText,
+                isDark && styles.darkText
               ]}>
                 Achievements
               </Text>
@@ -803,12 +870,13 @@ const HomeScreen = () => {
                   onSearch={setSearchQuery}
                   onSort={setSortKey}
                   onFilter={setStatusFilter}
+                  isDark={isDark}
                 />
                 <View style={styles.taskListContainer}>
-      <FlatList
+                  <FlatList
                     data={filteredTasks}
                     renderItem={renderTaskItem}
-        keyExtractor={(item) => item.id}
+                    keyExtractor={(item) => item.id}
                     contentContainerStyle={styles.taskList}
                     nestedScrollEnabled
                     scrollEnabled={false}
@@ -817,7 +885,7 @@ const HomeScreen = () => {
               </>
             )}
 
-            {activeTab === 'analytics' && renderAnalytics()}
+            {activeTab === 'analytics' && renderAnalytics(isDark)}
 
             {activeTab === 'achievements' && (
               <View style={styles.achievementsContainer}>
@@ -825,99 +893,29 @@ const HomeScreen = () => {
                   achievements={achievements}
                   userPoints={userPoints}
                   onClaimReward={handleClaimAchievement}
+                  isDark={isDark}
                 />
-          </View>
+              </View>
             )}
           </View>
         </View>
       </ScrollView>
 
-      {showNewTask && (
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>New Task</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Task Title"
-              value={newTask.title}
-              onChangeText={(text) => setNewTask({ ...newTask, title: text })}
-            />
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              placeholder="Description"
-              value={newTask.description}
-              onChangeText={(text) => setNewTask({ ...newTask, description: text })}
-              multiline
-            />
-            <View style={styles.priorityButtons}>
-              {['low', 'medium', 'high'].map((p) => (
-                <TouchableOpacity
-                  key={p}
-                  style={[
-                    styles.priorityButton,
-                    newTask.priority === p && (p === 'low' ? styles.lowPriority :
-                    p === 'medium' ? styles.mediumPriority :
-                    styles.highPriority),
-                  ]}
-                  onPress={() => setNewTask({ ...newTask, priority: p as 'low' | 'medium' | 'high' })}
-                >
-                  <Text
-                    style={[
-                      styles.priorityButtonText,
-                      p === 'low' ? styles.lowPriorityText :
-                      p === 'medium' ? styles.mediumPriorityText :
-                      styles.highPriorityText,
-                    ]}
-                  >
-                    {p.charAt(0).toUpperCase() + p.slice(1)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setShowNewTask(false)}
-              >
-                <Text style={styles.modalButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.saveButton]}
-                onPress={handleAddTask}
-              >
-                <Text style={styles.modalButtonText}>Save</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      )}
-
-      {showPomodoro && (
-        <PomodoroTimer
-          onComplete={() => {
-            setAchievements(prev =>
-              prev.map(achievement =>
-                achievement.id === 'pomodoro_master'
-                  ? {
-                      ...achievement,
-                      progress: achievement.progress + 1,
-                      completed: achievement.progress + 1 >= achievement.total,
-                    }
-                  : achievement
-              )
-            );
-            Alert.alert('Pomodoro Complete!', 'Take a break and stay productive!');
-            setShowPomodoro(false);
-          }}
-        />
-      )}
-
       {showRecurringForm && (
         <RecurringTaskForm
-          onSubmit={handleRecurringTaskSubmit}
-          onCancel={() => setShowRecurringForm(false)}
+          onCreateTask={handleRecurringTaskSubmit}
+          isDark={isDark}
         />
       )}
+
+      <MoodCheckup
+        visible={showMoodCheckup}
+        onClose={() => setShowMoodCheckup(false)}
+        onMoodSelect={handleMoodSelect}
+        tasks={tasks}
+        onTaskSelect={handleTaskSelect}
+        isDark={isDark}
+      />
     </View>
   );
 };
@@ -937,10 +935,20 @@ const styles = StyleSheet.create({
     borderBottomColor: '#eee',
     elevation: 2,
   },
+  backButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#F5F5F5',
+  },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#333',
+  },
+  settingsButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#F5F5F5',
   },
   content: {
     flex: 1,
@@ -948,52 +956,14 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: 16,
-    paddingBottom: 32, // Add extra padding at the bottom
+    paddingBottom: 32,
+    backgroundColor: '#F5F6F8',
+  },
+  darkContent: {
+    backgroundColor: '#121212',
   },
   taskListContainer: {
-    minHeight: 200, // Minimum height to show some tasks
-  },
-  moodCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  moodSubtitle: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  moodButtons: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  moodButton: {
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: '#f5f5f5',
-    minWidth: 80,
-  },
-  selectedMoodButton: {
-    backgroundColor: '#e3f2fd',
-    borderWidth: 2,
-    borderColor: '#2196F3',
+    minHeight: 200,
   },
   quickActionsCard: {
     backgroundColor: '#fff',
@@ -1015,6 +985,11 @@ const styles = StyleSheet.create({
   actionButton: {
     alignItems: 'center',
     width: '45%',
+    padding: 8,
+    borderRadius: 8,
+  },
+  darkActionButton: {
+    backgroundColor: '#1E1E1E',
   },
   actionIcon: {
     width: 48,
@@ -1023,6 +998,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 8,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  darkActionIcon: {
+    backgroundColor: '#1E1E1E',
+    elevation: 0,
+    shadowColor: 'transparent',
   },
   actionButtonText: {
     fontSize: 14,
@@ -1074,56 +1059,6 @@ const styles = StyleSheet.create({
   taskList: {
     padding: 16,
   },
-  suggestionsContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  suggestionsTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 12,
-  },
-  suggestionsList: {
-    marginBottom: 12,
-  },
-  suggestionItem: {
-    backgroundColor: '#f8f9fa',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 8,
-    borderLeftWidth: 4,
-  },
-  suggestionTitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
-    marginBottom: 4,
-  },
-  suggestionCategory: {
-    fontSize: 14,
-    color: '#666',
-  },
-  toggleButton: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 8,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-  },
-  toggleButtonText: {
-    fontSize: 14,
-    color: '#666',
-    marginRight: 8,
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -1151,13 +1086,81 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     alignItems: 'center',
   },
+  darkStatCard: {
+    backgroundColor: '#1E1E1E',
+    shadowColor: 'transparent',
+    elevation: 0,
+  },
   statNumber: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#2196F3',
   },
+  darkStatNumber: {
+    color: '#64B5F6',
+  },
   statLabel: {
     fontSize: 14,
+    color: '#666',
+    marginTop: 4,
+  },
+  periodStatsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 24,
+  },
+  periodCard: {
+    flex: 1,
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 8,
+    marginHorizontal: 4,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    alignItems: 'center',
+  },
+  darkPeriodCard: {
+    backgroundColor: '#1E1E1E',
+    shadowColor: 'transparent',
+    elevation: 0,
+  },
+  periodTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 8,
+  },
+  periodNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#2196F3',
+  },
+  periodLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+  },
+  progressBar: {
+    width: '100%',
+    height: 6,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 3,
+    marginVertical: 8,
+    overflow: 'hidden',
+  },
+  darkProgressBar: {
+    backgroundColor: '#333',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#4CAF50',
+    borderRadius: 3,
+  },
+  completionRate: {
+    fontSize: 12,
     color: '#666',
     marginTop: 4,
   },
@@ -1170,6 +1173,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+  },
+  darkChartContainer: {
+    backgroundColor: '#1E1E1E',
+    shadowColor: 'transparent',
+    elevation: 0,
   },
   chartTitle: {
     fontSize: 18,
@@ -1285,6 +1293,11 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     borderLeftWidth: 4,
   },
+  darkTaskItem: {
+    backgroundColor: '#1E1E1E',
+    shadowColor: 'transparent',
+    elevation: 0,
+  },
   highPriorityTask: {
     borderLeftColor: '#f44336',
     borderLeftWidth: 4,
@@ -1343,6 +1356,9 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 4,
   },
+  darkTaskMeta: {
+    backgroundColor: '#333',
+  },
   taskMetaText: {
     marginLeft: 4,
     fontSize: 12,
@@ -1352,6 +1368,13 @@ const styles = StyleSheet.create({
   taskStatus: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  darkTaskStatus: {
+    backgroundColor: '#333',
   },
   statusIndicator: {
     width: 8,
@@ -1364,15 +1387,89 @@ const styles = StyleSheet.create({
     color: '#666',
     textTransform: 'capitalize',
   },
-  moodIcon: {
-    fontSize: 24,
-    marginBottom: 4,
+  datePickerButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    backgroundColor: '#f9f9f9',
   },
-  moodLabel: {
-    fontSize: 12,
+  datePickerText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  completedTaskTitle: {
+    textDecorationLine: 'line-through',
+    color: '#888',
+  },
+  completedTaskText: {
+    color: '#888',
+  },
+  pomodoroModal: {
+    width: '90%',
+    maxWidth: 500,
+    backgroundColor: '#fff',
+    borderRadius: 15,
+    padding: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  closeButton: {
+    padding: 8,
+  },
+  pomodoroStats: {
+    marginTop: 20,
+    padding: 15,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 10,
+  },
+  pomodoroStatsText: {
+    fontSize: 14,
     color: '#666',
-    textAlign: 'center',
+    marginBottom: 5,
+  },
+  darkContainer: {
+    backgroundColor: '#121212',
+  },
+  darkHeader: {
+    backgroundColor: '#1E1E1E',
+    borderBottomColor: '#333',
+  },
+  darkButton: {
+    backgroundColor: '#333',
+  },
+  darkText: {
+    color: '#fff',
+  },
+  darkCard: {
+    backgroundColor: '#1E1E1E',
+  },
+  darkTabButtons: {
+    backgroundColor: '#1E1E1E',
+    borderBottomColor: '#333',
+  },
+  sessionBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: '#4CAF50',
+    borderRadius: 12,
+    padding: 2,
+  },
+  sessionBadgeText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#fff',
   },
 });
 
 export default HomeScreen;
+

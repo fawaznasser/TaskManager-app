@@ -15,25 +15,9 @@ export default function TabLayout() {
         tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
         tabBarInactiveTintColor: '#666',
         tabBarStyle: {
-          backgroundColor: '#fff',
-          borderTopWidth: 1,
-          borderTopColor: '#f0f0f0',
-          height: Platform.OS === 'ios' ? 88 : 60,
-          paddingBottom: Platform.OS === 'ios' ? 28 : 8,
+          display: 'none',
         },
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '500',
-        },
-        headerShown: true,
-        headerStyle: {
-          backgroundColor: '#fff',
-          elevation: 0,
-          shadowOpacity: 0,
-        },
-        headerTitleStyle: {
-          fontWeight: '600',
-        },
+        headerShown: false,
       }}>
       <Tabs.Screen
         name="index"

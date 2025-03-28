@@ -24,9 +24,11 @@ export type RootStackParamList = {
     title: string;
     description: string;
     icon: string;
+    progress: number;
+    total: number;
+    completed: boolean;
+    claimed: boolean;
     points: number;
-    unlocked: boolean;
-    unlockedAt?: Date;
   }
 
   export interface User {

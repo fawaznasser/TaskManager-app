@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, Platform } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { Audio } from 'expo-av';
 
 interface PomodoroTimerProps {
   onComplete?: () => void;
@@ -11,11 +12,45 @@ const WORK_TIME = 25 * 60; // 25 minutes in seconds
 const SHORT_BREAK = 5 * 60; // 5 minutes in seconds
 const LONG_BREAK = 15 * 60; // 15 minutes in seconds
 
-export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ onComplete }) => {
+const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ onComplete }) => {
   const [timeLeft, setTimeLeft] = useState(WORK_TIME);
   const [isRunning, setIsRunning] = useState(false);
   const [isWorkTime, setIsWorkTime] = useState(true);
   const [pomodoroCount, setPomodoroCount] = useState(0);
+  const [sound, setSound] = useState<Audio.Sound>();
+
+  const isNativePlatform = Platform.OS !== 'web';
+
+  useEffect(() => {
+    return sound && isNativePlatform
+      ? () => {
+          sound.unloadAsync();
+        }
+      : undefined;
+  }, [sound]);
+
+  const playSound = async () => {
+    if (!isNativePlatform) return;
+    
+    try {
+      const { sound } = await Audio.Sound.createAsync(
+        require('../assets/sounds/timer-complete.mp3')
+      );
+      setSound(sound);
+      await sound.playAsync();
+    } catch (error) {
+      console.error('Error playing sound:', error);
+    }
+  };
+
+  const triggerHaptics = async () => {
+    if (!isNativePlatform) return;
+    try {
+      await Haptics.selectionAsync();
+    } catch (error) {
+      console.error('Error triggering haptics:', error);
+    }
+  };
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -25,21 +60,41 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ onComplete }) => {
         setTimeLeft((prevTime) => prevTime - 1);
       }, 1000);
     } else if (timeLeft === 0) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      playSound();
+      if (isNativePlatform) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+      
       if (isWorkTime) {
         setPomodoroCount((prev) => prev + 1);
         if (pomodoroCount < 3) {
-          setTimeLeft(SHORT_BREAK);
+          Alert.alert(
+            'Work Session Complete!',
+            'Time for a short break.',
+            [{ text: 'OK', onPress: () => setTimeLeft(SHORT_BREAK) }]
+          );
         } else {
-          setTimeLeft(LONG_BREAK);
-          setPomodoroCount(0);
+          Alert.alert(
+            'Great Work!',
+            'Time for a long break. You\'ve completed 4 Pomodoros!',
+            [{ text: 'OK', onPress: () => {
+              setTimeLeft(LONG_BREAK);
+              setPomodoroCount(0);
+            }}]
+          );
         }
       } else {
-        setTimeLeft(WORK_TIME);
+        Alert.alert(
+          'Break Time Over',
+          'Ready to get back to work?',
+          [{ text: 'Let\'s Go!', onPress: () => setTimeLeft(WORK_TIME) }]
+        );
       }
+      
       setIsWorkTime((prev) => !prev);
       setIsRunning(false);
-      if (onComplete) {
+      
+      if (onComplete && isWorkTime) {
         onComplete();
       }
     }
@@ -51,17 +106,17 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ onComplete }) => {
     };
   }, [isRunning, timeLeft, isWorkTime, pomodoroCount, onComplete]);
 
-  const toggleTimer = () => {
+  const toggleTimer = async () => {
     setIsRunning((prev) => !prev);
-    Haptics.selectionAsync();
+    await triggerHaptics();
   };
 
-  const resetTimer = () => {
+  const resetTimer = async () => {
     setIsRunning(false);
     setTimeLeft(WORK_TIME);
     setIsWorkTime(true);
     setPomodoroCount(0);
-    Haptics.selectionAsync();
+    await triggerHaptics();
   };
 
   const formatTime = (seconds: number) => {
@@ -70,15 +125,27 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ onComplete }) => {
     return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
+  const getTimerColor = () => {
+    if (isWorkTime) {
+      return timeLeft < 60 ? '#f44336' : '#2196F3';
+    }
+    return '#4CAF50';
+  };
+
   return (
     <View style={styles.container}>
-      <View style={styles.timerCard}>
+      <View style={[styles.timerCard, { borderColor: getTimerColor() }]}>
         <Text style={styles.timerType}>
           {isWorkTime ? 'Work Time' : pomodoroCount === 3 ? 'Long Break' : 'Short Break'}
         </Text>
-        <Text style={styles.timer}>{formatTime(timeLeft)}</Text>
+        <Text style={[styles.timer, { color: getTimerColor() }]}>
+          {formatTime(timeLeft)}
+        </Text>
         <View style={styles.controls}>
-          <TouchableOpacity onPress={toggleTimer} style={styles.button}>
+          <TouchableOpacity 
+            onPress={toggleTimer} 
+            style={[styles.button, { backgroundColor: getTimerColor() }]}
+          >
             <MaterialIcons
               name={isRunning ? 'pause' : 'play-arrow'}
               size={24}
@@ -86,7 +153,10 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ onComplete }) => {
             />
             <Text style={styles.buttonText}>{isRunning ? 'Pause' : 'Start'}</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={resetTimer} style={[styles.button, styles.resetButton]}>
+          <TouchableOpacity 
+            onPress={resetTimer} 
+            style={[styles.button, styles.resetButton]}
+          >
             <MaterialIcons name="refresh" size={24} color="white" />
             <Text style={styles.buttonText}>Reset</Text>
           </TouchableOpacity>
@@ -103,6 +173,9 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ onComplete }) => {
             />
           ))}
         </View>
+        <Text style={styles.sessionInfo}>
+          {pomodoroCount}/4 sessions completed
+        </Text>
       </View>
     </View>
   );
@@ -117,8 +190,12 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     padding: 20,
     alignItems: 'center',
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
+    borderWidth: 2,
     elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   timerType: {
     fontSize: 18,
@@ -129,18 +206,17 @@ const styles = StyleSheet.create({
   timer: {
     fontSize: 48,
     fontWeight: 'bold',
-    color: '#007AFF',
     marginVertical: 20,
   },
   controls: {
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 20,
+    marginBottom: 20,
   },
   button: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#007AFF',
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 25,
@@ -166,11 +242,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#E5E5EA',
   },
   activeDot: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#2196F3',
     transform: [{ scale: 1.2 }],
   },
   completedDot: {
-    backgroundColor: '#34C759',
+    backgroundColor: '#4CAF50',
+  },
+  sessionInfo: {
+    marginTop: 10,
+    color: '#666',
+    fontSize: 14,
   },
 });
 

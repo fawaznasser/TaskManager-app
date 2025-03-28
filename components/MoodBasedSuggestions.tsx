@@ -11,15 +11,19 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { Task } from '@/types';
 
-interface MoodBasedTasksProps {
+interface MoodBasedSuggestionsProps {
   tasks: Task[];
-  currentMood: string;
+  currentMood: string | null;
   onSelectTask: (taskId: string) => void;
+  onOpenMoodCheckup: () => void;
 }
 
 interface Styles {
   container: ViewStyle;
-  sectionTitle: TextStyle;
+  header: ViewStyle;
+  title: TextStyle;
+  moodButton: ViewStyle;
+  moodText: TextStyle;
   taskList: ViewStyle;
   taskItem: ViewStyle;
   taskContent: ViewStyle;
@@ -38,24 +42,55 @@ interface Styles {
 
 const styles = StyleSheet.create<Styles>({
   container: {
-    flex: 1,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 15,
+    padding: 15,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  sectionTitle: {
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  title: {
     fontSize: 18,
     fontWeight: '600',
     color: '#333',
-    marginBottom: 15,
+  },
+  moodButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  moodText: {
+    fontSize: 14,
+    color: '#666',
+    marginRight: 4,
   },
   taskList: {
-    flex: 1,
+    maxHeight: 200,
   },
   taskItem: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'white',
-    padding: 15,
+    padding: 12,
     borderRadius: 10,
-    marginBottom: 10,
+    marginBottom: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
@@ -66,26 +101,26 @@ const styles = StyleSheet.create<Styles>({
     flex: 1,
   },
   taskTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '500',
     color: '#333',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   taskDeadline: {
     fontSize: 12,
     color: '#666',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   taskMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 4,
+    marginTop: 2,
   },
   priorityBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
-    marginRight: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 10,
+    marginRight: 6,
   },
   priorityHigh: {
     backgroundColor: '#ffebee',
@@ -97,24 +132,24 @@ const styles = StyleSheet.create<Styles>({
     backgroundColor: '#e8f5e9',
   },
   priorityText: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '500',
   },
   categoryText: {
-    fontSize: 12,
+    fontSize: 10,
     color: '#666',
     fontStyle: 'italic',
   },
   emptyContainer: {
-    padding: 20,
+    padding: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   emptyText: {
     textAlign: 'center',
     color: '#666',
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 12,
+    lineHeight: 18,
   },
 });
 
@@ -147,12 +182,15 @@ const getPriorityStyle = (priority: string): ViewStyle => {
   }
 };
 
-export default function MoodBasedTasks({
+export default function MoodBasedSuggestions({
   tasks,
   currentMood,
   onSelectTask,
-}: MoodBasedTasksProps) {
+  onOpenMoodCheckup,
+}: MoodBasedSuggestionsProps) {
   const getSuggestedTasks = () => {
+    if (!currentMood) return [];
+    
     const priorities = MOOD_TASK_PRIORITIES[currentMood as keyof typeof MOOD_TASK_PRIORITIES] || ['medium'];
     const categories = MOOD_CATEGORIES[currentMood as keyof typeof MOOD_CATEGORIES] || [];
     
@@ -177,54 +215,61 @@ export default function MoodBasedTasks({
         }
         return 0;
       })
-      .slice(0, 5); // Limit to 5 suggestions
+      .slice(0, 3); // Limit to 3 suggestions for the home screen
   };
 
   const suggestedTasks = getSuggestedTasks();
 
-  if (suggestedTasks.length === 0) {
-    return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>
-          No matching tasks found for your current mood.
-          {'\n'}
-          This might be a good time to plan new tasks!
-        </Text>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
-      <Text style={styles.sectionTitle}>Suggested Tasks for Your Mood:</Text>
+      <View style={styles.header}>
+        <Text style={styles.title}>Suggested Tasks</Text>
+        <TouchableOpacity style={styles.moodButton} onPress={onOpenMoodCheckup}>
+          <Text style={styles.moodText}>
+            {currentMood ? `Mood: ${currentMood.charAt(0).toUpperCase() + currentMood.slice(1)}` : 'Set Your Mood'}
+          </Text>
+          <MaterialIcons name="mood" size={16} color="#666" />
+        </TouchableOpacity>
+      </View>
+
       <ScrollView style={styles.taskList}>
-        {suggestedTasks.map((task) => (
-          <TouchableOpacity
-            key={task.id}
-            style={styles.taskItem}
-            onPress={() => onSelectTask(task.id)}
-          >
-            <View style={styles.taskContent}>
-              <Text style={styles.taskTitle}>{task.title}</Text>
-              {task.dueDate && (
-                <Text style={styles.taskDeadline}>
-                  Due: {task.dueDate.toLocaleDateString()}
-                </Text>
-              )}
-              <View style={styles.taskMeta}>
-                <View style={[styles.priorityBadge, getPriorityStyle(task.priority)]}>
-                  <Text style={styles.priorityText}>
-                    {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
+        {suggestedTasks.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>
+              {currentMood
+                ? "No matching tasks found for your current mood."
+                : "Set your mood to get personalized task suggestions!"}
+            </Text>
+          </View>
+        ) : (
+          suggestedTasks.map((task) => (
+            <TouchableOpacity
+              key={task.id}
+              style={styles.taskItem}
+              onPress={() => onSelectTask(task.id)}
+            >
+              <View style={styles.taskContent}>
+                <Text style={styles.taskTitle}>{task.title}</Text>
+                {task.dueDate && (
+                  <Text style={styles.taskDeadline}>
+                    Due: {task.dueDate.toLocaleDateString()}
                   </Text>
-                </View>
-                {task.category && (
-                  <Text style={styles.categoryText}>{task.category}</Text>
                 )}
+                <View style={styles.taskMeta}>
+                  <View style={[styles.priorityBadge, getPriorityStyle(task.priority)]}>
+                    <Text style={styles.priorityText}>
+                      {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
+                    </Text>
+                  </View>
+                  {task.category && (
+                    <Text style={styles.categoryText}>{task.category}</Text>
+                  )}
+                </View>
               </View>
-            </View>
-            <MaterialIcons name="chevron-right" size={24} color="#666" />
-          </TouchableOpacity>
-        ))}
+              <MaterialIcons name="chevron-right" size={20} color="#666" />
+            </TouchableOpacity>
+          ))
+        )}
       </ScrollView>
     </View>
   );

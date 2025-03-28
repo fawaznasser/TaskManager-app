@@ -3,36 +3,25 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   Switch,
+  ScrollView,
   Alert,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { auth, db } from '@/config/firebase';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
-
-interface Settings {
-  darkMode: boolean;
-  notifications: boolean;
-  soundEnabled: boolean;
-  vibrationEnabled: boolean;
-  autoCategorize: boolean;
-  showMoodPicker: boolean;
-  language: string;
-}
+import { MaterialIcons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTheme } from '../context/ThemeContext';
 
 const SettingsScreen = () => {
-  const router = useRouter();
-  const [settings, setSettings] = useState<Settings>({
-    darkMode: false,
+  const { theme, toggleTheme } = useTheme();
+  const isDark = theme === 'dark';
+  const [settings, setSettings] = useState({
     notifications: true,
     soundEnabled: true,
     vibrationEnabled: true,
-    autoCategorize: true,
-    showMoodPicker: true,
-    language: 'English',
+    autoStartBreaks: true,
+    showTaskCount: true,
   });
 
   useEffect(() => {
@@ -41,134 +30,143 @@ const SettingsScreen = () => {
 
   const loadSettings = async () => {
     try {
-      const userId = auth.currentUser?.uid;
-      if (!userId) {
-        router.replace("/(auth)/login");
-        return;
-      }
-
-      const settingsRef = doc(db, 'users', userId, 'settings', 'userSettings');
-      const settingsDoc = await getDoc(settingsRef);
-      
-      if (settingsDoc.exists()) {
-        setSettings(settingsDoc.data() as Settings);
+      const savedSettings = await AsyncStorage.getItem('appSettings');
+      if (savedSettings) {
+        setSettings(JSON.parse(savedSettings));
       }
     } catch (error) {
       console.error('Error loading settings:', error);
-      Alert.alert('Error', 'Failed to load settings');
     }
   };
 
-  const saveSettings = async (newSettings: Settings) => {
+  const saveSettings = async (newSettings: typeof settings) => {
     try {
-      const userId = auth.currentUser?.uid;
-      if (!userId) {
-        router.replace("/(auth)/login");
-        return;
-      }
-
-      const settingsRef = doc(db, 'users', userId, 'settings', 'userSettings');
-      await updateDoc(settingsRef, {
-        ...newSettings,
-        updatedAt: new Date()
-      });
+      await AsyncStorage.setItem('appSettings', JSON.stringify(newSettings));
       setSettings(newSettings);
     } catch (error) {
       console.error('Error saving settings:', error);
-      Alert.alert('Error', 'Failed to save settings');
+      Alert.alert('Error', 'Failed to save settings. Please try again.');
     }
   };
 
-  const toggleSetting = (key: keyof Settings) => {
-    const newSettings = {
+  const toggleSetting = (key: keyof typeof settings) => {
+    saveSettings({
       ...settings,
       [key]: !settings[key],
-    };
-    saveSettings(newSettings);
+    });
   };
 
-  const renderSettingItem = (
-    title: string,
-    description: string,
-    key: keyof Settings,
-    icon: string
-  ) => (
-    <View style={styles.settingItem}>
-      <View style={styles.settingItemLeft}>
-        <Ionicons name={icon as any} size={24} color="#666" />
-        <View style={styles.settingItemText}>
-          <Text style={styles.settingTitle}>{title}</Text>
-          <Text style={styles.settingDescription}>{description}</Text>
-        </View>
-      </View>
-      <Switch
-        value={settings[key] as boolean}
-        onValueChange={() => toggleSetting(key)}
-        trackColor={{ false: '#ddd', true: '#4CAF50' }}
-        thumbColor={settings[key] ? '#fff' : '#f4f3f4'}
-      />
-    </View>
-  );
+  const handleBackPress = () => {
+    router.back();
+  };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
+    <View style={[styles.container, isDark && styles.darkContainer]}>
+      <View style={[styles.header, isDark && styles.darkHeader]}>
         <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={handleBackPress}
+          style={[styles.backButton, isDark && styles.darkButton]}
         >
-          <Ionicons name="arrow-back" size={24} color="#666" />
+          <MaterialIcons name="arrow-back" size={24} color={isDark ? '#fff' : '#333'} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Settings</Text>
+        <Text style={[styles.headerTitle, isDark && styles.darkText]}>Settings</Text>
+        <View style={styles.headerRight} />
       </View>
 
-      <ScrollView style={styles.content}>
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Appearance</Text>
-          {renderSettingItem(
-            'Dark Mode',
-            'Enable dark theme for the app',
-            'darkMode',
-            'moon-outline'
-          )}
+      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+        <View style={[styles.section, isDark && styles.darkSection]}>
+          <Text style={[styles.sectionTitle, isDark && styles.darkText]}>Notifications</Text>
+          <View style={[styles.settingItem, isDark && styles.darkSettingItem]}>
+            <View style={styles.settingInfo}>
+              <MaterialIcons name="notifications" size={24} color={isDark ? '#fff' : '#666'} />
+              <Text style={[styles.settingLabel, isDark && styles.darkText]}>Enable Notifications</Text>
+            </View>
+            <Switch
+              value={settings.notifications}
+              onValueChange={() => toggleSetting('notifications')}
+              trackColor={{ false: '#767577', true: '#81b0ff' }}
+              thumbColor={settings.notifications ? '#2196F3' : '#f4f3f4'}
+            />
+          </View>
+          <View style={[styles.settingItem, isDark && styles.darkSettingItem]}>
+            <View style={styles.settingInfo}>
+              <MaterialIcons name="volume-up" size={24} color={isDark ? '#fff' : '#666'} />
+              <Text style={[styles.settingLabel, isDark && styles.darkText]}>Sound</Text>
+            </View>
+            <Switch
+              value={settings.soundEnabled}
+              onValueChange={() => toggleSetting('soundEnabled')}
+              trackColor={{ false: '#767577', true: '#81b0ff' }}
+              thumbColor={settings.soundEnabled ? '#2196F3' : '#f4f3f4'}
+            />
+          </View>
+          <View style={[styles.settingItem, isDark && styles.darkSettingItem]}>
+            <View style={styles.settingInfo}>
+              <MaterialIcons name="vibration" size={24} color={isDark ? '#fff' : '#666'} />
+              <Text style={[styles.settingLabel, isDark && styles.darkText]}>Vibration</Text>
+            </View>
+            <Switch
+              value={settings.vibrationEnabled}
+              onValueChange={() => toggleSetting('vibrationEnabled')}
+              trackColor={{ false: '#767577', true: '#81b0ff' }}
+              thumbColor={settings.vibrationEnabled ? '#2196F3' : '#f4f3f4'}
+            />
+          </View>
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Notifications</Text>
-          {renderSettingItem(
-            'Enable Notifications',
-            'Receive notifications for tasks and updates',
-            'notifications',
-            'notifications-outline'
-          )}
-          {renderSettingItem(
-            'Sound',
-            'Play sound for notifications',
-            'soundEnabled',
-            'volume-high-outline'
-          )}
-          {renderSettingItem(
-            'Vibration',
-            'Vibrate for notifications',
-            'vibrationEnabled',
-            'vibrate-outline'
-          )}
+        <View style={[styles.section, isDark && styles.darkSection]}>
+          <Text style={[styles.sectionTitle, isDark && styles.darkText]}>Appearance</Text>
+          <View style={[styles.settingItem, isDark && styles.darkSettingItem]}>
+            <View style={styles.settingInfo}>
+              <MaterialIcons name="dark-mode" size={24} color={isDark ? '#fff' : '#666'} />
+              <Text style={[styles.settingLabel, isDark && styles.darkText]}>Dark Mode</Text>
+            </View>
+            <Switch
+              value={isDark}
+              onValueChange={toggleTheme}
+              trackColor={{ false: '#767577', true: '#81b0ff' }}
+              thumbColor={isDark ? '#2196F3' : '#f4f3f4'}
+            />
+          </View>
+          <View style={[styles.settingItem, isDark && styles.darkSettingItem]}>
+            <View style={styles.settingInfo}>
+              <MaterialIcons name="format-list-numbered" size={24} color={isDark ? '#fff' : '#666'} />
+              <Text style={[styles.settingLabel, isDark && styles.darkText]}>Show Task Count</Text>
+            </View>
+            <Switch
+              value={settings.showTaskCount}
+              onValueChange={() => toggleSetting('showTaskCount')}
+              trackColor={{ false: '#767577', true: '#81b0ff' }}
+              thumbColor={settings.showTaskCount ? '#2196F3' : '#f4f3f4'}
+            />
+          </View>
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Task Management</Text>
-          {renderSettingItem(
-            'Auto-Categorize',
-            'Automatically categorize tasks based on content',
-            'autoCategorize',
-            'folder-outline'
-          )}
-          {renderSettingItem(
-            'Mood Picker',
-            'Show mood selection when opening the app',
-            'showMoodPicker',
-            'happy-outline'
-          )}
+        <View style={[styles.section, isDark && styles.darkSection]}>
+          <Text style={[styles.sectionTitle, isDark && styles.darkText]}>Pomodoro</Text>
+          <View style={[styles.settingItem, isDark && styles.darkSettingItem]}>
+            <View style={styles.settingInfo}>
+              <MaterialIcons name="timer" size={24} color={isDark ? '#fff' : '#666'} />
+              <Text style={[styles.settingLabel, isDark && styles.darkText]}>Auto-start Breaks</Text>
+            </View>
+            <Switch
+              value={settings.autoStartBreaks}
+              onValueChange={() => toggleSetting('autoStartBreaks')}
+              trackColor={{ false: '#767577', true: '#81b0ff' }}
+              thumbColor={settings.autoStartBreaks ? '#2196F3' : '#f4f3f4'}
+            />
+          </View>
+        </View>
+
+        <View style={[styles.section, isDark && styles.darkSection]}>
+          <Text style={[styles.sectionTitle, isDark && styles.darkText]}>About</Text>
+          <View style={[styles.settingItem, isDark && styles.darkSettingItem]}>
+            <View style={styles.settingInfo}>
+              <MaterialIcons name="info" size={24} color={isDark ? '#fff' : '#666'} />
+              <Text style={[styles.settingLabel, isDark && styles.darkText]}>Version</Text>
+            </View>
+            <Text style={[styles.settingValue, isDark && styles.darkText]}>1.0.0</Text>
+          </View>
         </View>
       </ScrollView>
     </View>
@@ -178,62 +176,93 @@ const SettingsScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#F5F6F8',
+  },
+  darkContainer: {
+    backgroundColor: '#121212',
   },
   header: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
-    paddingTop: 48,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
+    elevation: 2,
+  },
+  darkHeader: {
+    backgroundColor: '#1E1E1E',
+    borderBottomColor: '#333',
   },
   backButton: {
     padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#F5F5F5',
+  },
+  darkButton: {
+    backgroundColor: '#333',
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
-    marginLeft: 16,
+    color: '#333',
+  },
+  darkText: {
+    color: '#fff',
+  },
+  headerRight: {
+    width: 40,
   },
   content: {
     flex: 1,
   },
-  section: {
+  contentContainer: {
     padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+  },
+  section: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  darkSection: {
+    backgroundColor: '#1E1E1E',
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 16,
+    fontWeight: 'bold',
     color: '#333',
+    marginBottom: 16,
   },
   settingItem: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
     paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
   },
-  settingItemLeft: {
+  darkSettingItem: {
+    borderBottomColor: '#333',
+  },
+  settingInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
+    gap: 12,
   },
-  settingItemText: {
-    marginLeft: 16,
-    flex: 1,
-  },
-  settingTitle: {
+  settingLabel: {
     fontSize: 16,
     color: '#333',
   },
-  settingDescription: {
-    fontSize: 14,
+  settingValue: {
+    fontSize: 16,
     color: '#666',
-    marginTop: 4,
   },
 });
 

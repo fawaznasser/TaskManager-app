@@ -9,11 +9,15 @@ import {
   Platform,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import MoodBasedTasks from './MoodBasedTasks';
+import { Task } from '@/types';
 
 interface MoodCheckupProps {
   onMoodSelect: (mood: string) => void;
   visible: boolean;
   onClose: () => void;
+  tasks: Task[];
+  onTaskSelect: (taskId: string) => void;
 }
 
 const MOODS = [
@@ -60,62 +64,76 @@ const PRIORITY_TIPS = {
   productive: "Tackle your most challenging tasks now!",
 };
 
-export default function MoodCheckup({ onMoodSelect, visible, onClose }: MoodCheckupProps) {
+export default function MoodCheckup({ onMoodSelect, visible, onClose, tasks, onTaskSelect }: MoodCheckupProps) {
   const [selectedMood, setSelectedMood] = useState<string | null>(null);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   const handleMoodSelect = (mood: string) => {
     setSelectedMood(mood);
+    setShowSuggestions(true);
     onMoodSelect(mood);
-    onClose();
   };
 
   const getRandomQuote = (mood: string) => {
-    const moodQuotes = QUOTES[mood as keyof typeof QUOTES];
-    return moodQuotes[Math.floor(Math.random() * moodQuotes.length)];
+    const quotes = QUOTES[mood as keyof typeof QUOTES] || QUOTES.neutral;
+    return quotes[Math.floor(Math.random() * quotes.length)];
   };
 
   return (
     <Modal
       visible={visible}
-      animationType="slide"
       transparent={true}
+      animationType="slide"
       onRequestClose={onClose}
     >
-      <View style={styles.modalContainer}>
+      <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <View style={styles.header}>
             <Text style={styles.title}>How are you feeling today?</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <MaterialIcons name="close" size={24} color="#666" />
-            </TouchableOpacity>
+            {showSuggestions && (
+              <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                <MaterialIcons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            )}
           </View>
 
           <ScrollView style={styles.scrollView}>
-            <View style={styles.moodsContainer}>
-              {MOODS.map((mood) => (
-                <TouchableOpacity
-                  key={mood.id}
-                  style={[
-                    styles.moodButton,
-                    { backgroundColor: mood.color },
-                    selectedMood === mood.id && styles.selectedMood,
-                  ]}
-                  onPress={() => handleMoodSelect(mood.id)}
-                >
-                  <Text style={styles.moodIcon}>{mood.icon}</Text>
-                  <Text style={styles.moodLabel}>{mood.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {selectedMood && (
-              <View style={styles.quoteContainer}>
-                <Text style={styles.quoteText}>
-                  {getRandomQuote(selectedMood)}
-                </Text>
-                <Text style={styles.priorityTip}>
-                  {PRIORITY_TIPS[selectedMood as keyof typeof PRIORITY_TIPS]}
-                </Text>
+            {!showSuggestions ? (
+              <View style={styles.moodsContainer}>
+                {MOODS.map((mood) => (
+                  <TouchableOpacity
+                    key={mood.id}
+                    style={[
+                      styles.moodButton,
+                      { backgroundColor: mood.color },
+                      selectedMood === mood.id && styles.selectedMood,
+                    ]}
+                    onPress={() => handleMoodSelect(mood.id)}
+                  >
+                    <Text style={styles.moodIcon}>{mood.icon}</Text>
+                    <Text style={styles.moodLabel}>{mood.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : (
+              <View style={styles.suggestionsContainer}>
+                {selectedMood && (
+                  <>
+                    <View style={styles.quoteContainer}>
+                      <Text style={styles.quoteText}>
+                        {getRandomQuote(selectedMood)}
+                      </Text>
+                      <Text style={styles.priorityTip}>
+                        {PRIORITY_TIPS[selectedMood as keyof typeof PRIORITY_TIPS]}
+                      </Text>
+                    </View>
+                    <MoodBasedTasks
+                      tasks={tasks}
+                      currentMood={selectedMood}
+                      onSelectTask={onTaskSelect}
+                    />
+                  </>
+                )}
               </View>
             )}
           </ScrollView>
@@ -126,36 +144,33 @@ export default function MoodCheckup({ onMoodSelect, visible, onClose }: MoodChec
 }
 
 const styles = StyleSheet.create({
-  modalContainer: {
+  modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
+    backgroundColor: 'white',
+    borderRadius: 15,
+    padding: 20,
     width: '90%',
-    maxHeight: '80%',
-    ...Platform.select({
-      ios: {
-        boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.25)',
-      },
-      android: {
-        elevation: 5,
-      },
-    }),
+    maxWidth: 500,
+    maxHeight: '90%',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    marginBottom: 20,
   },
   title: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#333',
   },
@@ -163,32 +178,28 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   scrollView: {
-    padding: 20,
+    maxHeight: '80%',
   },
   moodsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginBottom: 20,
+    justifyContent: 'space-around',
+    gap: 15,
   },
   moodButton: {
-    width: '48%',
-    padding: 20,
-    borderRadius: 15,
+    width: '45%',
+    padding: 15,
+    borderRadius: 12,
     alignItems: 'center',
     marginBottom: 15,
-    ...Platform.select({
-      ios: {
-        boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
   },
   selectedMood: {
-    transform: [{ scale: 1.05 }],
-    borderWidth: 2,
+    borderWidth: 3,
     borderColor: '#007AFF',
   },
   moodIcon: {
@@ -200,23 +211,25 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
   },
+  suggestionsContainer: {
+    flex: 1,
+  },
   quoteContainer: {
-    backgroundColor: '#f8f8f8',
-    padding: 20,
-    borderRadius: 15,
-    marginTop: 10,
+    backgroundColor: '#f8f9fa',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 20,
   },
   quoteText: {
-    fontSize: 18,
-    fontStyle: 'italic',
+    fontSize: 16,
     color: '#333',
-    marginBottom: 15,
-    textAlign: 'center',
+    fontStyle: 'italic',
+    marginBottom: 10,
+    lineHeight: 24,
   },
   priorityTip: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#666',
-    textAlign: 'center',
-    fontWeight: '500',
+    marginTop: 10,
   },
 }); 
