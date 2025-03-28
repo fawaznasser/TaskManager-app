@@ -1,19 +1,63 @@
 import React, { useState } from "react";
-import { View, Text, TextInput, Button, StyleSheet, Alert, TouchableOpacity } from "react-native";
+import { View, Text, TextInput, StyleSheet, Alert, TouchableOpacity, ActivityIndicator } from "react-native";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "@/config/firebase";
+import { auth, db } from "@/config/firebase";
 import { router } from "expo-router";
+import { doc, getDoc, setDoc, Timestamp } from "firebase/firestore";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
+    if (!email.trim() || !password.trim()) {
+      Alert.alert("Error", "Please enter both email and password");
+      return;
+    }
+    
+    setLoading(true);
+    
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      // Sign in the user
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const userId = userCredential.user.uid;
+      
+      console.log("User signed in:", userId);
+      
+      // Check if user document exists
+      const userDocRef = doc(db, 'users', userId);
+      const userDoc = await getDoc(userDocRef);
+      
+      if (!userDoc.exists()) {
+        console.log("Creating user document...");
+        // Create new user document
+        await setDoc(userDocRef, {
+          email: email,
+          createdAt: Timestamp.now(),
+          stats: {
+            totalTasks: 0,
+            completedTasks: 0,
+            currentStreak: 0,
+            longestStreak: 0,
+            points: 0
+          },
+          settings: {
+            theme: 'light',
+            notifications: true,
+            soundEffects: true
+          }
+        });
+        console.log("User document created successfully");
+      }
+      
+      // Navigate to home screen
       router.replace("/(tabs)");
     } catch (error: any) {
-      Alert.alert("Error", error.message);
+      console.error("Login error:", error);
+      Alert.alert("Error", error.message || "Failed to sign in");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -40,8 +84,16 @@ export default function Login() {
         onChangeText={setPassword}
         secureTextEntry
       />
-      <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
-        <Text style={styles.loginButtonText}>Login</Text>
+      <TouchableOpacity 
+        style={styles.loginButton} 
+        onPress={handleLogin}
+        disabled={loading}
+      >
+        {loading ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.loginButtonText}>Login</Text>
+        )}
       </TouchableOpacity>
       <TouchableOpacity onPress={() => router.push("/(auth)/signup")}>
         <Text style={styles.signupButtonText}>Don't have an account? Sign up</Text>

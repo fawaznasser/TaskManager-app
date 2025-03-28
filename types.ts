@@ -7,20 +7,53 @@ export type RootStackParamList = {
   export interface Task {
     id: string;
     title: string;
-    description: string;
-    deadline: Date;
-    priority: 'low' | 'medium' | 'high';
-    category: string;
     completed: boolean;
-    userId: string;
     createdAt: Date;
-    status: "pending" | "in_progress" | "completed";
-    mood?: string;
+    userId: string;
+    priority: 'low' | 'medium' | 'high';
+    category?: string;
+    dueDate?: Date;
+    description?: string;
+    status?: 'pending' | 'in_progress' | 'completed';
     completedAt?: Date;
-    // Recurring task properties
-    isRecurring: boolean;
-    recurringType?: 'daily' | 'weekly' | 'monthly';
-    recurringInterval?: number; // e.g., every 2 days, 3 weeks, etc.
-    recurringEndDate?: Date;
-    parentTaskId?: string; // For instances of recurring tasks
+    isRecurring?: boolean;
+  }
+
+  export interface Achievement {
+    id: string;
+    title: string;
+    description: string;
+    icon: string;
+    points: number;
+    unlocked: boolean;
+    unlockedAt?: Date;
+  }
+
+  export interface User {
+    id: string;
+    email: string;
+    displayName?: string;
+    achievements: Achievement[];
+    totalPoints: number;
+    createdAt: Date;
+    lastLogin: Date;
+  }
+
+  export interface Mood {
+    id: string;
+    userId: string;
+    mood: 'happy' | 'neutral' | 'tired' | 'stressed' | 'productive';
+    timestamp: Date;
+    notes?: string;
+  }
+
+  export interface PomodoroSession {
+    id: string;
+    userId: string;
+    taskId?: string;
+    startTime: Date;
+    endTime?: Date;
+    duration: number; // in minutes
+    completed: boolean;
+    type: 'work' | 'break' | 'longBreak';
   }

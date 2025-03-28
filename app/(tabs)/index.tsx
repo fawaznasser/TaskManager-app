@@ -1,6 +1,6 @@
-import React from "react";
-import { Redirect } from "expo-router";
+import React from 'react';
+import HomeScreen from '../screens/HomeScreen';
 
-export default function Index() {
-  return <Redirect href="/screens/LoginScreen" />;
+export default function TasksScreen() {
+  return <HomeScreen />;
 }

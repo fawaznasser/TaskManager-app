@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Switch, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Switch, Alert, Platform } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Picker } from '@react-native-picker/picker';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -71,6 +71,20 @@ export const RecurringTaskForm: React.FC<RecurringTaskFormProps> = ({
     return text;
   };
 
+  const handleDeadlineDateChange = (event: any, selectedDate?: Date) => {
+    setShowDeadlinePicker(Platform.OS === 'ios');
+    if (selectedDate) {
+      setDeadline(selectedDate);
+    }
+  };
+
+  const handleEndDateChange = (event: any, selectedDate?: Date) => {
+    setShowEndDatePicker(Platform.OS === 'ios');
+    if (selectedDate) {
+      setRecurringEndDate(selectedDate);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -130,7 +144,7 @@ export const RecurringTaskForm: React.FC<RecurringTaskFormProps> = ({
           style={styles.datePickerButton} 
           onPress={() => setShowDeadlinePicker(true)}
         >
-          <Text>{deadline.toLocaleDateString()}</Text>
+          <Text style={styles.datePickerText}>{deadline.toLocaleDateString()}</Text>
           <MaterialIcons name="calendar-today" size={20} color="#666" />
         </TouchableOpacity>
       </View>
@@ -139,13 +153,8 @@ export const RecurringTaskForm: React.FC<RecurringTaskFormProps> = ({
         <DateTimePicker
           value={deadline}
           mode="date"
-          display="default"
-          onChange={(event, selectedDate) => {
-            setShowDeadlinePicker(false);
-            if (selectedDate) {
-              setDeadline(selectedDate);
-            }
-          }}
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={handleDeadlineDateChange}
         />
       )}
 
@@ -192,7 +201,7 @@ export const RecurringTaskForm: React.FC<RecurringTaskFormProps> = ({
               style={styles.datePickerButton} 
               onPress={() => setShowEndDatePicker(true)}
             >
-              <Text>{recurringEndDate ? recurringEndDate.toLocaleDateString() : 'Select End Date'}</Text>
+              <Text style={styles.datePickerText}>{recurringEndDate ? recurringEndDate.toLocaleDateString() : 'Select End Date'}</Text>
               <MaterialIcons name="calendar-today" size={20} color="#666" />
             </TouchableOpacity>
           </View>
@@ -202,13 +211,8 @@ export const RecurringTaskForm: React.FC<RecurringTaskFormProps> = ({
               value={recurringEndDate || new Date()}
               mode="date"
               minimumDate={new Date()}
-              display="default"
-              onChange={(event, selectedDate) => {
-                setShowEndDatePicker(false);
-                if (selectedDate) {
-                  setRecurringEndDate(selectedDate);
-                }
-              }}
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              onChange={handleEndDateChange}
             />
           )}
 
@@ -260,60 +264,58 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#ddd',
     borderRadius: 8,
-    padding: 10,
-    marginBottom: 15,
-    backgroundColor: '#f9f9f9',
+    padding: 12,
+    marginBottom: 16,
+    fontSize: 16,
   },
   textArea: {
-    height: 80,
+    height: 100,
     textAlignVertical: 'top',
   },
   fieldContainer: {
-    marginBottom: 15,
+    marginBottom: 16,
   },
   fieldLabel: {
     fontSize: 14,
-    fontWeight: '500',
-    color: '#666',
-    marginBottom: 5,
+    fontWeight: '600',
+    color: '#444',
+    marginBottom: 8,
   },
   priorityContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
   priorityButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    borderWidth: 2,
-    backgroundColor: '#fff',
     flex: 1,
-    marginHorizontal: 5,
+    padding: 10,
+    alignItems: 'center',
+    borderRadius: 8,
+    marginRight: 8,
+  },
+  lowPriority: {
+    backgroundColor: '#e8f5e9',
+  },
+  mediumPriority: {
+    backgroundColor: '#fff3e0',
+  },
+  highPriority: {
+    backgroundColor: '#ffebee',
   },
   activePriorityButton: {
-    backgroundColor: '#f0f0f0',
+    borderWidth: 2,
   },
   priorityButtonText: {
     fontWeight: '600',
-  },
-  highPriority: {
-    borderColor: '#ff4444',
-  },
-  mediumPriority: {
-    borderColor: '#ffbb33',
-  },
-  lowPriority: {
-    borderColor: '#00C851',
-  },
-  highPriorityText: {
-    color: '#ff4444',
-  },
-  mediumPriorityText: {
-    color: '#ffbb33',
+    fontSize: 14,
   },
   lowPriorityText: {
-    color: '#00C851',
+    color: '#4caf50',
+  },
+  mediumPriorityText: {
+    color: '#ff9800',
+  },
+  highPriorityText: {
+    color: '#f44336',
   },
   datePickerButton: {
     flexDirection: 'row',
@@ -322,14 +324,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#ddd',
     borderRadius: 8,
-    padding: 10,
+    padding: 12,
     backgroundColor: '#f9f9f9',
+  },
+  datePickerText: {
+    fontSize: 16,
+    color: '#333',
   },
   switchContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 15,
+    marginBottom: 16,
   },
   recurringContainer: {
     flexDirection: 'row',
@@ -339,52 +345,47 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#ddd',
     borderRadius: 8,
-    padding: 10,
-    width: 60,
-    textAlign: 'center',
+    padding: 12,
+    width: 70,
     marginRight: 10,
-    backgroundColor: '#f9f9f9',
+    textAlign: 'center',
+    fontSize: 16,
   },
   typePicker: {
     flex: 1,
     height: 50,
-    backgroundColor: '#f9f9f9',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
   },
   recurringDescription: {
     fontSize: 14,
     color: '#007AFF',
+    marginBottom: 20,
     fontStyle: 'italic',
-    marginBottom: 15,
-    textAlign: 'center',
   },
   buttonContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 10,
   },
   cancelButton: {
-    padding: 12,
+    backgroundColor: '#f5f5f5',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#ddd',
+    minWidth: 100,
     alignItems: 'center',
-    flex: 1,
-    marginRight: 10,
   },
   cancelButtonText: {
     color: '#666',
     fontWeight: '600',
   },
   createButton: {
-    padding: 12,
-    borderRadius: 8,
     backgroundColor: '#007AFF',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    minWidth: 150,
     alignItems: 'center',
-    flex: 1,
-    marginLeft: 10,
   },
   createButtonText: {
     color: 'white',

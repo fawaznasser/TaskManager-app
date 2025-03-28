@@ -8,23 +8,12 @@ interface TaskFiltersProps {
   onFilter: (status: 'all' | 'pending' | 'in_progress' | 'completed') => void;
 }
 
-export const TaskFilters: React.FC<TaskFiltersProps> = ({
-  onSearch,
-  onSort,
-  onFilter,
-}) => {
-  const [searchText, setSearchText] = useState('');
+export default function TaskFilters({ onSearch, onSort, onFilter }: TaskFiltersProps) {
   const [activeFilter, setActiveFilter] = useState<'all' | 'pending' | 'in_progress' | 'completed'>('all');
   const [activeSortKey, setActiveSortKey] = useState<'deadline' | 'priority' | 'category'>('deadline');
 
   const handleSearch = (text: string) => {
-    setSearchText(text);
     onSearch(text);
-  };
-
-  const handleFilter = (filter: 'all' | 'pending' | 'in_progress' | 'completed') => {
-    setActiveFilter(filter);
-    onFilter(filter);
   };
 
   const handleSort = (key: 'deadline' | 'priority' | 'category') => {
@@ -32,9 +21,14 @@ export const TaskFilters: React.FC<TaskFiltersProps> = ({
     onSort(key);
   };
 
-  const SORT_OPTIONS = [
-    { key: 'deadline', icon: 'access-time', label: 'Deadline' },
-    { key: 'priority', icon: 'low-priority', label: 'Priority' },
+  const handleFilter = (status: 'all' | 'pending' | 'in_progress' | 'completed') => {
+    setActiveFilter(status);
+    onFilter(status);
+  };
+
+  const sortOptions = [
+    { key: 'deadline', icon: 'event', label: 'Deadline' },
+    { key: 'priority', icon: 'flag', label: 'Priority' },
     { key: 'category', icon: 'category', label: 'Category' }
   ] as const;
 
@@ -45,17 +39,12 @@ export const TaskFilters: React.FC<TaskFiltersProps> = ({
         <TextInput
           style={styles.searchInput}
           placeholder="Search tasks..."
-          value={searchText}
+          placeholderTextColor="#666"
           onChangeText={handleSearch}
         />
-        {searchText ? (
-          <TouchableOpacity onPress={() => handleSearch('')}>
-            <MaterialIcons name="close" size={24} color="#666" />
-          </TouchableOpacity>
-        ) : null}
       </View>
 
-      <View style={styles.filterContainer}>
+      <View style={styles.filterSection}>
         <Text style={styles.label}>Status:</Text>
         <View style={styles.filterButtons}>
           {['all', 'pending', 'in_progress', 'completed'].map((filter) => (
@@ -80,30 +69,30 @@ export const TaskFilters: React.FC<TaskFiltersProps> = ({
         </View>
       </View>
 
-      <View style={styles.sortContainer}>
+      <View style={styles.sortSection}>
         <Text style={styles.label}>Sort by:</Text>
         <View style={styles.sortButtons}>
-          {SORT_OPTIONS.map(({ key, icon, label }) => (
+          {sortOptions.map((option) => (
             <TouchableOpacity
-              key={key}
+              key={option.key}
               style={[
                 styles.sortButton,
-                activeSortKey === key && styles.activeSortButton,
+                activeSortKey === option.key && styles.activeSortButton,
               ]}
-              onPress={() => handleSort(key as 'deadline' | 'priority' | 'category')}
+              onPress={() => handleSort(option.key)}
             >
               <MaterialIcons
-                name={icon}
+                name={option.icon}
                 size={20}
-                color={activeSortKey === key ? 'white' : '#666'}
+                color={activeSortKey === option.key ? '#fff' : '#666'}
               />
               <Text
                 style={[
                   styles.sortButtonText,
-                  activeSortKey === key && styles.activeSortButtonText,
+                  activeSortKey === option.key && styles.activeSortButtonText,
                 ]}
               >
-                {label}
+                {option.label}
               </Text>
             </TouchableOpacity>
           ))}
@@ -111,41 +100,34 @@ export const TaskFilters: React.FC<TaskFiltersProps> = ({
       </View>
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: 'white',
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    padding: 16,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f5f5f5',
     borderRadius: 8,
-    paddingHorizontal: 10,
-    marginBottom: 15,
+    paddingHorizontal: 12,
+    marginBottom: 16,
   },
   searchIcon: {
-    marginRight: 10,
+    marginRight: 8,
   },
   searchInput: {
     flex: 1,
     height: 40,
     fontSize: 16,
+    color: '#333',
   },
-  filterContainer: {
-    marginBottom: 15,
-  },
-  sortContainer: {
-    marginBottom: 5,
+  filterSection: {
+    marginBottom: 16,
   },
   label: {
     fontSize: 14,
@@ -161,7 +143,7 @@ const styles = StyleSheet.create({
   filterButton: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 15,
+    borderRadius: 16,
     backgroundColor: '#f5f5f5',
   },
   activeFilterButton: {
@@ -175,21 +157,20 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '600',
   },
+  sortSection: {
+    marginBottom: 8,
+  },
   sortButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     gap: 8,
   },
   sortButton: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 15,
+    paddingVertical: 6,
+    borderRadius: 16,
     backgroundColor: '#f5f5f5',
-    gap: 6,
   },
   activeSortButton: {
     backgroundColor: '#007AFF',
@@ -197,11 +178,10 @@ const styles = StyleSheet.create({
   sortButtonText: {
     fontSize: 14,
     color: '#666',
+    marginLeft: 4,
   },
   activeSortButtonText: {
     color: 'white',
     fontWeight: '600',
   },
-});
-
-export default TaskFilters; 
+}); 

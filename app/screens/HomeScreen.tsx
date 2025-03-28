@@ -168,23 +168,34 @@ const HomeScreen = () => {
         filtered = filtered.filter(
           task =>
             task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            task.description.toLowerCase().includes(searchQuery.toLowerCase())
+            (task.description?.toLowerCase() ?? '').includes(searchQuery.toLowerCase())
         );
       }
 
       if (statusFilter !== 'all') {
-        filtered = filtered.filter(task => task.status === statusFilter);
+        filtered = filtered.filter(task => {
+          switch (statusFilter) {
+            case 'completed':
+              return task.completed;
+            case 'in_progress':
+              return !task.completed;
+            case 'pending':
+              return !task.completed;
+            default:
+              return true;
+          }
+        });
       }
 
       filtered.sort((a, b) => {
         switch (sortKey) {
           case 'deadline':
-            return a.deadline.getTime() - b.deadline.getTime();
+            return (a.dueDate?.getTime() ?? 0) - (b.dueDate?.getTime() ?? 0);
           case 'priority':
             const priorityOrder = { high: 0, medium: 1, low: 2 };
             return priorityOrder[a.priority] - priorityOrder[b.priority];
           case 'category':
-            return a.category.localeCompare(b.category);
+            return (a.category ?? '').localeCompare(b.category ?? '');
           default:
             return 0;
         }
@@ -206,7 +217,7 @@ const HomeScreen = () => {
             completed: tasks.length > 0,
           };
         case 'task_master':
-          const completedTasks = tasks.filter(task => task.status === 'completed').length;
+          const completedTasks = tasks.filter(task => task.completed).length;
           return {
             ...achievement,
             progress: completedTasks,
@@ -215,10 +226,7 @@ const HomeScreen = () => {
         case 'productive_day':
           const today = new Date();
           const tasksCompletedToday = tasks.filter(
-            task =>
-              task.status === 'completed' &&
-              task.completedAt &&
-              task.completedAt.toDateString() === today.toDateString()
+            task => task.completed
           ).length;
           return {
             ...achievement,
@@ -242,17 +250,25 @@ const HomeScreen = () => {
       );
       
       const querySnapshot = await getDocs(q);
-      const fetchedTasks = querySnapshot.docs.map(doc => ({
+      const fetchedTasks = querySnapshot.docs.map(doc => {
+          const data = doc.data();
+        return {
           id: doc.id,
-        ...doc.data(),
-          deadline: doc.data().deadline.toDate(),
-        createdAt: doc.data().createdAt.toDate(),
-        completedAt: doc.data().completedAt?.toDate(),
-        })) as Task[];
+          title: data.title,
+          description: data.description,
+          dueDate: data.deadline?.toDate(),
+          priority: data.priority,
+          category: data.category,
+          createdAt: data.createdAt.toDate(),
+          completed: data.completed || false,
+          status: data.status || 'pending',
+          userId: data.userId
+        } as Task;
+      });
 
       setTasks(fetchedTasks);
       setFilteredTasks(fetchedTasks);
-      } catch (error) {
+    } catch (error) {
       console.error('Error fetching tasks:', error);
       Alert.alert('Error', 'Failed to fetch tasks. Please try again.');
     } finally {
@@ -269,7 +285,7 @@ const HomeScreen = () => {
     try {
       const userId = auth.currentUser?.uid;
       if (!userId) {
-        router.replace("/screens/LoginScreen");
+        router.replace("/(auth)/login");
         return;
       }
 
@@ -367,7 +383,7 @@ const HomeScreen = () => {
       )
     );
 
-    const achievement = achievements.find(a => a.id === achievementId);
+      const achievement = achievements.find(a => a.id === achievementId);
     if (achievement) {
       setUserPoints(prev => prev + achievement.points);
       Alert.alert(
@@ -381,7 +397,7 @@ const HomeScreen = () => {
     try {
       const userId = auth.currentUser?.uid;
       if (!userId) {
-        router.replace("/screens/LoginScreen");
+        router.replace("/(auth)/login");
         return;
       }
 
@@ -463,7 +479,7 @@ const HomeScreen = () => {
         <View style={styles.taskMeta}>
           <MaterialIcons name="schedule" size={16} color="#666" />
           <Text style={styles.taskMetaText}>
-            {item.deadline.toLocaleDateString()}
+            {item.dueDate?.toLocaleDateString() || 'No date'}
           </Text>
         </View>
         <View style={[
@@ -492,16 +508,16 @@ const HomeScreen = () => {
       <View style={styles.taskStatus}>
         <View style={[
           styles.statusIndicator,
-          { backgroundColor: item.status === 'completed' ? '#4CAF50' : '#FFC107' }
+          { backgroundColor: item.completed ? '#4CAF50' : '#FFC107' }
         ]} />
-        <Text style={styles.statusText}>{item.status}</Text>
+        <Text style={styles.statusText}>{item.completed ? 'Completed' : 'In Progress'}</Text>
       </View>
     </View>
   );
 
   const renderAnalytics = () => {
     const categoryData = tasks.reduce((acc: { [key: string]: number }, task) => {
-      acc[task.category] = (acc[task.category] || 0) + 1;
+      acc[task.category ?? 'other'] = (acc[task.category ?? 'other'] || 0) + 1;
       return acc;
     }, {});
 
@@ -510,9 +526,9 @@ const HomeScreen = () => {
       datasets: [{
         data: Object.values(categoryData) as number[]
       }]
-    };
+  };
 
-    return (
+  return (
       <ScrollView style={styles.analyticsContainer}>
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>
@@ -521,13 +537,13 @@ const HomeScreen = () => {
           </View>
           <View style={styles.statCard}>
             <Text style={styles.statNumber}>
-              {tasks.filter(task => task.status === 'completed').length}
+              {tasks.filter(task => task.completed).length}
             </Text>
             <Text style={styles.statLabel}>Completed</Text>
           </View>
           <View style={styles.statCard}>
             <Text style={styles.statNumber}>
-              {tasks.filter(task => task.status === 'in_progress').length}
+              {tasks.filter(task => !task.completed).length}
             </Text>
             <Text style={styles.statLabel}>In Progress</Text>
           </View>
@@ -559,31 +575,31 @@ const HomeScreen = () => {
   };
 
   const renderMoodPicker = () => (
-    <View style={styles.modalContainer}>
+      <View style={styles.modalContainer}>
       <View style={styles.modalContent}>
         <Text style={styles.modalTitle}>Select Your Mood</Text>
         <Text style={styles.moodSubtitle}>Check-in {moodSelectionCount}/3</Text>
-        <View style={styles.moodButtons}>
-          {MOODS.map((mood) => (
-            <TouchableOpacity
-              key={mood.id}
-              style={[
-                styles.moodButton,
-                currentMood === mood.id && styles.selectedMoodButton,
-              ]}
+          <View style={styles.moodButtons}>
+            {MOODS.map((mood) => (
+              <TouchableOpacity
+                key={mood.id}
+                style={[
+                  styles.moodButton,
+                  currentMood === mood.id && styles.selectedMoodButton,
+                ]}
               onPress={() => {
                 setSelectedMood(mood.id);
                 setShowMoodPicker(false);
               }}
-            >
-              <Text style={styles.moodIcon}>{mood.icon}</Text>
-              <Text style={styles.moodLabel}>{mood.label}</Text>
-            </TouchableOpacity>
-          ))}
+              >
+                <Text style={styles.moodIcon}>{mood.icon}</Text>
+                <Text style={styles.moodLabel}>{mood.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
       </View>
-    </View>
-  );
+    );
 
   const renderMoodBasedSuggestions = () => {
     if (!selectedMood) return null;
@@ -623,9 +639,9 @@ const HomeScreen = () => {
                 <Text style={styles.suggestionCategory}>
                   {task.category || 'Other'}
                 </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+            </TouchableOpacity>
+        ))}
+    </View>
         )}
         <TouchableOpacity 
           style={styles.toggleButton}
@@ -655,11 +671,11 @@ const HomeScreen = () => {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Task Manager</Text>
+          <Text style={styles.headerTitle}>Task Manager</Text>
         <TouchableOpacity onPress={handleSignOut} style={styles.signOutButton}>
           <MaterialIcons name="logout" size={24} color="#FF6B6B" />
-        </TouchableOpacity>
-      </View>
+          </TouchableOpacity>
+        </View>
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
         {/* Mood Section */}
@@ -789,10 +805,10 @@ const HomeScreen = () => {
                   onFilter={setStatusFilter}
                 />
                 <View style={styles.taskListContainer}>
-                  <FlatList
+      <FlatList
                     data={filteredTasks}
                     renderItem={renderTaskItem}
-                    keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item.id}
                     contentContainerStyle={styles.taskList}
                     nestedScrollEnabled
                     scrollEnabled={false}
@@ -810,7 +826,7 @@ const HomeScreen = () => {
                   userPoints={userPoints}
                   onClaimReward={handleClaimAchievement}
                 />
-              </View>
+          </View>
             )}
           </View>
         </View>

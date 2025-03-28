@@ -146,25 +146,23 @@ class VoiceCommandService {
         priority = 'low';
       }
       
-      // Extract deadline
+      // Extract due date
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
       tomorrow.setHours(23, 59, 59, 999);
       
-      let deadline = tomorrow;
+      let dueDate = tomorrow;
       if (lowercaseText.includes('today')) {
         const today = new Date();
         today.setHours(23, 59, 59, 999);
-        deadline = today;
+        dueDate = today;
       }
       
       return {
         title,
         description: `Created via voice command: "${text}"`,
         priority,
-        deadline,
-        status: 'pending',
-        isRecurring: false,
+        dueDate,
         completed: false,
       };
     } catch (error) {
